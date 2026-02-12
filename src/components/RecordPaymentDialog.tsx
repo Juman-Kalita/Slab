@@ -19,7 +19,7 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [amount, setAmount] = useState("");
 
-  const customers = getCustomers().filter((c) => c.slabsHeld > 0);
+  const customers = getCustomers().filter((c) => c.materials.length > 0);
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
   const calculatedRent = selectedCustomer ? calculateRent(selectedCustomer) : null;
 
@@ -39,26 +39,9 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
     const customer = customers.find((c) => c.id === selectedCustomerId);
     if (!customer) return;
 
-    // Get rent details before payment
-    const rentBefore = calculateRent(customer);
-
     const success = recordPayment(selectedCustomerId, amountNum);
     if (success) {
       toast.success("Payment recorded successfully!");
-      
-      // Generate and download invoice
-      generateInvoice({
-        customer,
-        invoiceNumber: generateInvoiceNumber(),
-        invoiceDate: new Date().toISOString(),
-        baseAmount: rentBefore.baseAmount,
-        penaltyAmount: rentBefore.penaltyAmount,
-        totalRequired: rentBefore.totalRequired,
-        amountPaid: rentBefore.amountPaid + amountNum,
-        remainingDue: Math.max(0, rentBefore.remainingDue - amountNum),
-        daysOverdue: rentBefore.daysOverdue,
-        isWithinGracePeriod: rentBefore.isWithinGracePeriod,
-      });
       
       setSelectedCustomerId("");
       setAmount("");
@@ -84,13 +67,16 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
               </SelectTrigger>
               <SelectContent>
                 {customers.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground">No customers with slabs</div>
+                  <div className="p-2 text-sm text-muted-foreground">No customers with materials</div>
                 ) : (
-                  customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} - {c.slabsHeld} slabs
-                    </SelectItem>
-                  ))
+                  customers.map((c) => {
+                    const totalItems = c.materials.reduce((sum, m) => sum + m.quantity, 0);
+                    return (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} - {totalItems} items
+                      </SelectItem>
+                    );
+                  })
                 )}
               </SelectContent>
             </Select>
@@ -99,12 +85,22 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
           {calculatedRent && (
             <div className="rounded-lg bg-muted p-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Base Amount:</span>
-                <span className="font-semibold">₹{calculatedRent.baseAmount.toLocaleString("en-IN")}</span>
+                <span className="text-muted-foreground">Rent Amount:</span>
+                <span className="font-semibold">₹{calculatedRent.rentAmount.toLocaleString("en-IN")}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Loading Charges:</span>
+                <span className="font-semibold">₹{(calculatedRent.issueLoadingCharges + calculatedRent.returnLoadingCharges).toLocaleString("en-IN")}</span>
+              </div>
+              {calculatedRent.lostItemsPenalty > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Lost Items:</span>
+                  <span className="font-semibold text-red-600">₹{calculatedRent.lostItemsPenalty.toLocaleString("en-IN")}</span>
+                </div>
+              )}
               {calculatedRent.penaltyAmount > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Penalty:</span>
+                  <span className="text-muted-foreground">Late Penalty:</span>
                   <span className="font-semibold text-red-600">₹{calculatedRent.penaltyAmount.toLocaleString("en-IN")}</span>
                 </div>
               )}

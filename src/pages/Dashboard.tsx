@@ -1,18 +1,18 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { logout, getCustomers, getDashboardStats, calculateRent, type Customer } from "@/lib/rental-store";
+import { logout, getCustomers, getDashboardStats, calculateRent, getMaterialType, type Customer } from "@/lib/rental-store";
+import { generateInvoice, generateInvoiceNumber } from "@/lib/invoice-generator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { HardHat, LogOut, Users, Layers, Clock, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, Download } from "lucide-react";
-import IssueSlabsDialog from "@/components/IssueSlabsDialog";
-import RecordReturnDialog from "@/components/RecordReturnDialog";
+import { HardHat, LogOut, Users, Package, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, Download } from "lucide-react";
+import IssueMaterialsDialog from "@/components/IssueMaterialsDialog";
+import RecordMaterialReturnDialog from "@/components/RecordMaterialReturnDialog";
 import RecordPaymentDialog from "@/components/RecordPaymentDialog";
 import { format } from "date-fns";
-import { generateInvoice, generateInvoiceNumber } from "@/lib/invoice-generator";
 import { toast } from "sonner";
 
 const Dashboard = () => {
@@ -38,25 +38,32 @@ const Dashboard = () => {
     navigate("/");
   };
 
+  // Force re-read when refreshKey changes
+  void refreshKey;
+
   const handleDownloadInvoice = (customer: Customer) => {
     const rent = calculateRent(customer);
     generateInvoice({
       customer,
       invoiceNumber: generateInvoiceNumber(),
       invoiceDate: new Date().toISOString(),
-      baseAmount: rent.baseAmount,
+      rentAmount: rent.rentAmount,
+      issueLoadingCharges: rent.issueLoadingCharges,
       penaltyAmount: rent.penaltyAmount,
+      returnLoadingCharges: rent.returnLoadingCharges,
+      lostItemsPenalty: rent.lostItemsPenalty,
       totalRequired: rent.totalRequired,
-      amountPaid: rent.amountPaid,
+      amountPaid: customer.amountPaid,
       remainingDue: rent.remainingDue,
       daysOverdue: rent.daysOverdue,
       isWithinGracePeriod: rent.isWithinGracePeriod,
+      materialBreakdown: rent.materialBreakdown.map(item => ({
+        ...item,
+        initialQuantity: customer.materials.find(m => m.materialTypeId === item.materialType.id)?.initialQuantity || 0
+      })),
     });
     toast.success("Invoice downloaded successfully!");
   };
-
-  // Force re-read when refreshKey changes
-  void refreshKey;
 
   if (selectedCustomer) {
     const customer = customers.find((c) => c.id === selectedCustomer.id) || selectedCustomer;
@@ -67,7 +74,7 @@ const Dashboard = () => {
         <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-primary px-4 py-3 md:px-8">
           <div className="flex items-center gap-3">
             <HardHat className="h-7 w-7 text-accent" />
-            <h1 className="text-lg font-bold text-primary-foreground">SlabRent Pro</h1>
+            <h1 className="text-lg font-bold text-primary-foreground">Material Rental Pro</h1>
           </div>
           <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
             <LogOut className="mr-1 h-4 w-4" /> Logout
@@ -79,10 +86,7 @@ const Dashboard = () => {
             <Button variant="ghost" onClick={() => setSelectedCustomer(null)} className="gap-1">
               <ArrowLeft className="h-4 w-4" /> Back to Dashboard
             </Button>
-            <Button 
-              onClick={() => handleDownloadInvoice(customer)} 
-              className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2"
-            >
+            <Button onClick={() => handleDownloadInvoice(customer)} className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
               <Download className="h-4 w-4" /> Download Invoice
             </Button>
           </div>
@@ -101,36 +105,118 @@ const Dashboard = () => {
                     <span className="text-red-600 font-medium">Overdue by {rent.daysOverdue} days</span>
                   )}
                 </div>
-                <div><span className="text-muted-foreground">Initial Slabs Taken:</span><br />{customer.initialSlabs} slabs</div>
-                <div><span className="text-muted-foreground">Returned:</span><br />{customer.totalReturned} slabs</div>
-                <div><span className="text-muted-foreground">Currently Held:</span><br /><span className="font-bold text-accent">{customer.slabsHeld} slabs</span></div>
-                <div className="col-span-2 md:col-span-3 pt-2 border-t space-y-2">
-                  <div>
-                    <span className="text-muted-foreground">Base Amount ({customer.initialSlabs} slabs × ₹1,000):</span>{" "}
-                    <span className="text-lg font-semibold">₹{rent.baseAmount.toLocaleString("en-IN")}</span>
-                  </div>
-                  {rent.penaltyAmount > 0 && (
-                    <div>
-                      <span className="text-muted-foreground">Penalty ({rent.daysOverdue} days × {customer.initialSlabs} slabs × ₹100):</span>{" "}
-                      <span className="text-lg font-semibold text-red-600">₹{rent.penaltyAmount.toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t">
-                    <span className="text-muted-foreground">Total Required:</span>{" "}
-                    <span className="text-xl font-bold">₹{rent.totalRequired.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Amount Paid:</span>{" "}
-                    <span className="text-lg font-semibold text-green-600">₹{rent.amountPaid.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="pt-2 border-t">
-                    <span className="text-muted-foreground">Remaining Due:</span>{" "}
-                    <span className="text-2xl font-bold text-accent">₹{rent.remainingDue.toLocaleString("en-IN")}</span>
-                  </div>
-                  {rent.isFullyPaid && (
-                    <div className="text-sm text-green-600 font-medium">✓ Fully paid - New cycle started</div>
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm pt-4 border-t">
+                <div>
+                  <span className="text-muted-foreground">Initial Items Taken:</span><br />
+                  <span className="font-semibold">
+                    {customer.history
+                      .filter(h => h.action === "Issued")
+                      .reduce((sum, h) => sum + (h.quantity || 0), 0)} items
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Returned:</span><br />
+                  <span className="font-semibold">
+                    {customer.history
+                      .filter(h => h.action === "Returned")
+                      .reduce((sum, h) => sum + (h.quantity || 0), 0)} items
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Currently Held:</span><br />
+                  <span className="font-semibold text-accent">
+                    {customer.materials.filter(m => m.quantity > 0).reduce((sum, m) => sum + m.quantity, 0)} items
+                  </span>
+                </div>
+              </div>
+
+              {/* Materials Breakdown */}
+              <div className="pt-4 border-t">
+                <h3 className="font-semibold mb-3">Materials Held</h3>
+                <div className="space-y-2">
+                  {customer.materials.filter(m => m.quantity > 0).map((material) => {
+                    const materialType = getMaterialType(material.materialTypeId);
+                    if (!materialType) return null;
+                    return (
+                      <div key={material.materialTypeId} className="flex justify-between items-center p-2 bg-muted rounded">
+                        <div>
+                          <span className="font-medium">{materialType.name} ({materialType.size})</span>
+                          <span className="text-sm text-muted-foreground ml-2">× {material.quantity}</span>
+                        </div>
+                        <span className="text-sm">₹{materialType.rentPerDay}/day</span>
+                      </div>
+                    );
+                  })}
+                  {customer.materials.filter(m => m.quantity > 0).length === 0 && (
+                    <div className="text-sm text-muted-foreground">No materials currently held</div>
                   )}
                 </div>
+              </div>
+
+              {/* Financial Breakdown */}
+              <div className="pt-4 border-t space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Rent Amount (grace period):</span>
+                  <span className="font-semibold">₹{rent.rentAmount.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Issue Loading Charges:</span>
+                  <span className="font-semibold">₹{rent.issueLoadingCharges.toLocaleString("en-IN")}</span>
+                </div>
+                {rent.penaltyAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Late Penalty ({rent.daysOverdue} days):</span>
+                    <span className="font-semibold text-red-600">₹{rent.penaltyAmount.toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span>₹{(rent.rentAmount + rent.issueLoadingCharges + rent.penaltyAmount).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Less: Paid</span>
+                  <span>-₹{customer.amountPaid.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>Unpaid from grace period:</span>
+                  <span>₹{Math.max(0, rent.rentAmount + rent.issueLoadingCharges + rent.penaltyAmount - customer.amountPaid).toLocaleString("en-IN")}</span>
+                </div>
+                
+                {(rent.returnLoadingCharges > 0 || rent.lostItemsPenalty > 0) && (
+                  <>
+                    <div className="pt-2 border-t text-sm font-medium">Additional Charges:</div>
+                    {rent.returnLoadingCharges > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Return Loading Charges:</span>
+                        <span className="font-semibold">₹{rent.returnLoadingCharges.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                    {rent.lostItemsPenalty > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Lost Items Penalty:</span>
+                        <span className="font-semibold text-red-600">₹{rent.lostItemsPenalty.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                    {rent.amountPaid > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Less: Overpayment applied</span>
+                        <span>-₹{rent.amountPaid.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                <div className="pt-3 border-t flex justify-between">
+                  <span className="font-bold text-lg">Total Amount Due:</span>
+                  <span className="text-2xl font-bold text-accent">₹{rent.totalRequired.toLocaleString("en-IN")}</span>
+                </div>
+                
+                {rent.isFullyPaid && (
+                  <div className="text-sm text-green-600 font-medium">✓ Fully paid</div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -143,27 +229,38 @@ const Dashboard = () => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Action</TableHead>
-                    <TableHead className="text-right">Slabs</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customer.history.map((ev, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{format(new Date(ev.date), "dd MMM yyyy")}</TableCell>
-                      <TableCell>
-                        <span className={
-                          ev.action === "Issued" ? "text-accent font-medium" : 
-                          ev.action === "Payment" ? "text-green-600 font-medium" :
-                          "text-muted-foreground font-medium"
-                        }>
-                          {ev.action}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">{ev.slabs > 0 ? ev.slabs : "-"}</TableCell>
-                      <TableCell className="text-right">{ev.amount ? `₹${ev.amount.toLocaleString("en-IN")}` : "-"}</TableCell>
-                    </TableRow>
-                  ))}
+                  {customer.history.map((ev, i) => {
+                    const materialType = ev.materialTypeId ? getMaterialType(ev.materialTypeId) : null;
+                    return (
+                      <TableRow key={i}>
+                        <TableCell>{format(new Date(ev.date), "dd MMM yyyy")}</TableCell>
+                        <TableCell>
+                          <span className={
+                            ev.action === "Issued" ? "text-accent font-medium" : 
+                            ev.action === "Payment" ? "text-green-600 font-medium" :
+                            "text-muted-foreground font-medium"
+                          }>
+                            {ev.action}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {materialType ? `${materialType.name} (${materialType.size})` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {ev.quantity ? `${ev.quantity}${ev.quantityLost ? ` (${ev.quantityLost} lost)` : ""}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {ev.amount ? `₹${ev.amount.toLocaleString("en-IN")}` : "-"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -179,7 +276,7 @@ const Dashboard = () => {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-primary px-4 py-3 md:px-8">
         <div className="flex items-center gap-3">
           <HardHat className="h-7 w-7 text-accent" />
-          <h1 className="text-lg font-bold text-primary-foreground">SlabRent Pro</h1>
+          <h1 className="text-lg font-bold text-primary-foreground">Material Rental Pro</h1>
         </div>
         <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
           <LogOut className="mr-1 h-4 w-4" /> Logout
@@ -188,11 +285,10 @@ const Dashboard = () => {
 
       <main className="mx-auto max-w-6xl p-4 md:p-8 space-y-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {[
             { label: "Active Customers", value: stats.totalCustomers, icon: Users, color: "bg-primary text-primary-foreground" },
-            { label: "Total Slabs Rented", value: stats.totalSlabsRented, icon: Layers, color: "bg-accent text-accent-foreground" },
-            { label: "Pending Slabs", value: stats.totalPendingSlabs, icon: Clock, color: "bg-primary text-primary-foreground" },
+            { label: "Total Items Rented", value: stats.totalItemsRented, icon: Package, color: "bg-accent text-accent-foreground" },
             { label: "Pending Amount", value: `₹${stats.totalPendingAmount.toLocaleString("en-IN")}`, icon: IndianRupee, color: "bg-accent text-accent-foreground" },
           ].map((stat) => (
             <Card key={stat.label} className="overflow-hidden border-none shadow-md">
@@ -212,7 +308,7 @@ const Dashboard = () => {
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-3">
           <Button onClick={() => setIssueOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 font-semibold gap-2">
-            <Plus className="h-4 w-4" /> Issue Slabs
+            <Plus className="h-4 w-4" /> Issue Materials
           </Button>
           <Button onClick={() => setReturnOpen(true)} variant="outline" className="gap-2 font-semibold">
             <RotateCcw className="h-4 w-4" /> Record Return
@@ -240,64 +336,30 @@ const Dashboard = () => {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Customer</TableHead>
-                    <TableHead className="text-center">Slabs Held</TableHead>
-                    <TableHead className="text-center">Returned</TableHead>
-                    <TableHead className="text-right">Pending Rent</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
+                    <TableHead className="text-center">Items Held</TableHead>
+                    <TableHead className="text-right">Pending Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        {search ? "No customers found" : "No rentals yet. Issue slabs to get started!"}
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                        {search ? "No customers found" : "No rentals yet. Issue materials to get started!"}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filtered.map((c) => {
-                      const rent = c.slabsHeld > 0 ? calculateRent(c).remainingDue : 0;
+                      const totalItems = c.materials.filter(m => m.quantity > 0).reduce((sum, m) => sum + m.quantity, 0);
+                      const rent = calculateRent(c).remainingDue;
                       return (
                         <TableRow
                           key={c.id}
-                          className="hover:bg-accent/10 transition-colors"
+                          className="cursor-pointer hover:bg-accent/10 transition-colors"
+                          onClick={() => setSelectedCustomer(c)}
                         >
-                          <TableCell 
-                            className="font-medium cursor-pointer"
-                            onClick={() => setSelectedCustomer(c)}
-                          >
-                            {c.name}
-                          </TableCell>
-                          <TableCell 
-                            className="text-center cursor-pointer"
-                            onClick={() => setSelectedCustomer(c)}
-                          >
-                            {c.slabsHeld}
-                          </TableCell>
-                          <TableCell 
-                            className="text-center cursor-pointer"
-                            onClick={() => setSelectedCustomer(c)}
-                          >
-                            {c.totalReturned}
-                          </TableCell>
-                          <TableCell 
-                            className="text-right font-semibold cursor-pointer"
-                            onClick={() => setSelectedCustomer(c)}
-                          >
-                            ₹{rent.toLocaleString("en-IN")}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownloadInvoice(c);
-                              }}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
+                          <TableCell className="font-medium">{c.name}</TableCell>
+                          <TableCell className="text-center">{totalItems}</TableCell>
+                          <TableCell className="text-right font-semibold">₹{rent.toLocaleString("en-IN")}</TableCell>
                         </TableRow>
                       );
                     })
@@ -309,8 +371,8 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <IssueSlabsDialog open={issueOpen} onOpenChange={setIssueOpen} onSuccess={refresh} />
-      <RecordReturnDialog open={returnOpen} onOpenChange={setReturnOpen} onSuccess={refresh} />
+      <IssueMaterialsDialog open={issueOpen} onOpenChange={setIssueOpen} onSuccess={refresh} />
+      <RecordMaterialReturnDialog open={returnOpen} onOpenChange={setReturnOpen} onSuccess={refresh} />
       <RecordPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} onSuccess={refresh} />
     </div>
   );

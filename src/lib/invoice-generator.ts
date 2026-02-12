@@ -1,19 +1,28 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
-import type { Customer } from "./rental-store";
+import type { Customer, MaterialType } from "./rental-store";
+import { getMaterialType } from "./rental-store";
 
 interface InvoiceData {
   customer: Customer;
   invoiceNumber: string;
   invoiceDate: string;
-  baseAmount: number;
+  rentAmount: number;
+  issueLoadingCharges: number;
   penaltyAmount: number;
+  returnLoadingCharges: number;
+  lostItemsPenalty: number;
   totalRequired: number;
   amountPaid: number;
   remainingDue: number;
   daysOverdue: number;
   isWithinGracePeriod: boolean;
+  materialBreakdown: Array<{
+    materialType: MaterialType;
+    quantity: number;
+    initialQuantity: number;
+  }>;
 }
 
 export function generateInvoice(data: InvoiceData): void {
@@ -22,7 +31,7 @@ export function generateInvoice(data: InvoiceData): void {
   // Company Header
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
-  doc.text("SLAB RENTAL INVOICE", 105, 20, { align: "center" });
+  doc.text("MATERIAL RENTAL INVOICE", 105, 20, { align: "center" });
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -70,63 +79,111 @@ export function generateInvoice(data: InvoiceData): void {
   }
   doc.setTextColor(0, 0, 0);
   
-  // Slab Details Table
+  // Materials Details Table
+  const materialRows = data.materialBreakdown.map(item => [
+    `${item.materialType.name} ${item.materialType.size}`,
+    item.initialQuantity.toString(),
+    item.quantity.toString(),
+    `₹${item.materialType.rentPerDay}`,
+  ]);
+  
   autoTable(doc, {
     startY: 80,
-    head: [["Description", "Quantity", "Rate (₹)", "Amount (₹)"]],
-    body: [
-      [
-        "Slabs Issued (Initial)",
-        data.customer.initialSlabs.toString(),
-        "1,000",
-        data.baseAmount.toLocaleString("en-IN"),
-      ],
-    ],
+    head: [["Material", "Issued", "Held", "Rate/Day"]],
+    body: materialRows,
     theme: "grid",
     headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: "bold" },
-    styles: { fontSize: 10 },
+    styles: { fontSize: 9 },
     columnStyles: {
       0: { cellWidth: 80 },
       1: { halign: "center", cellWidth: 30 },
-      2: { halign: "right", cellWidth: 30 },
+      2: { halign: "center", cellWidth: 30 },
       3: { halign: "right", cellWidth: 40 },
     },
   });
   
-  let currentY = (doc as any).lastAutoTable.finalY + 5;
+  let currentY = (doc as any).lastAutoTable.finalY + 10;
   
-  // Penalty if applicable
+  // Financial Breakdown
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Financial Breakdown", 15, currentY);
+  currentY += 8;
+  
+  const breakdown = [
+    ["Rent Amount (Grace Period)", `₹${data.rentAmount.toLocaleString("en-IN")}`],
+    ["Issue Loading Charges", `₹${data.issueLoadingCharges.toLocaleString("en-IN")}`],
+  ];
+  
   if (data.penaltyAmount > 0) {
-    autoTable(doc, {
-      startY: currentY,
-      body: [
-        [
-          `Late Payment Penalty (${data.daysOverdue} days × ${data.customer.initialSlabs} slabs × ₹100)`,
-          "",
-          "",
-          data.penaltyAmount.toLocaleString("en-IN"),
-        ],
-      ],
-      theme: "plain",
-      styles: { fontSize: 10, textColor: [220, 38, 38] },
-      columnStyles: {
-        0: { cellWidth: 80 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 30 },
-        3: { halign: "right", cellWidth: 40, fontStyle: "bold" },
-      },
-    });
-    currentY = (doc as any).lastAutoTable.finalY + 5;
+    breakdown.push([`Late Penalty (${data.daysOverdue} days)`, `₹${data.penaltyAmount.toLocaleString("en-IN")}`]);
   }
   
-  // Slabs Status
+  breakdown.push(["Subtotal", `₹${(data.rentAmount + data.issueLoadingCharges + data.penaltyAmount).toLocaleString("en-IN")}`]);
+  breakdown.push(["Less: Paid", `-₹${data.customer.amountPaid.toLocaleString("en-IN")}`]);
+  breakdown.push(["Unpaid from Grace Period", `₹${Math.max(0, data.rentAmount + data.issueLoadingCharges + data.penaltyAmount - data.customer.amountPaid).toLocaleString("en-IN")}`]);
+  
+  if (data.returnLoadingCharges > 0 || data.lostItemsPenalty > 0) {
+    breakdown.push(["", ""]);
+    breakdown.push(["Additional Charges:", ""]);
+    
+    if (data.returnLoadingCharges > 0) {
+      breakdown.push(["Return Loading Charges", `₹${data.returnLoadingCharges.toLocaleString("en-IN")}`]);
+    }
+    
+    if (data.lostItemsPenalty > 0) {
+      breakdown.push(["Lost Items Penalty", `₹${data.lostItemsPenalty.toLocaleString("en-IN")}`]);
+    }
+  }
+  
   autoTable(doc, {
     startY: currentY,
-    head: [["Slab Status", "Quantity"]],
+    body: breakdown,
+    theme: "plain",
+    styles: { fontSize: 10 },
+    columnStyles: {
+      0: { cellWidth: 120, fontStyle: "normal" },
+      1: { halign: "right", cellWidth: 60, fontStyle: "bold" },
+    },
+  });
+  
+  currentY = (doc as any).lastAutoTable.finalY + 10;
+  
+  // Total Amount Box
+  doc.setDrawColor(41, 128, 185);
+  doc.setLineWidth(1);
+  doc.setFillColor(41, 128, 185);
+  doc.rect(120, currentY, 75, 12, "FD");
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("TOTAL AMOUNT DUE:", 125, currentY + 8);
+  doc.text(`₹${data.remainingDue.toLocaleString("en-IN")}`, 190, currentY + 8, { align: "right" });
+  
+  doc.setTextColor(0, 0, 0);
+  currentY += 20;
+  
+  // Items Summary
+  const totalIssued = data.customer.history
+    .filter(h => h.action === "Issued")
+    .reduce((sum, h) => sum + (h.quantity || 0), 0);
+  
+  const totalReturned = data.customer.history
+    .filter(h => h.action === "Returned")
+    .reduce((sum, h) => sum + (h.quantity || 0), 0);
+  
+  const currentlyHeld = data.customer.materials
+    .filter(m => m.quantity > 0)
+    .reduce((sum, m) => sum + m.quantity, 0);
+  
+  autoTable(doc, {
+    startY: currentY,
+    head: [["Item Status", "Quantity"]],
     body: [
-      ["Initial Slabs Taken", data.customer.initialSlabs.toString()],
-      ["Slabs Returned", data.customer.totalReturned.toString()],
-      ["Slabs Currently Held", data.customer.slabsHeld.toString()],
+      ["Total Items Issued", totalIssued.toString()],
+      ["Items Returned", totalReturned.toString()],
+      ["Items Currently Held", currentlyHeld.toString()],
     ],
     theme: "striped",
     headStyles: { fillColor: [52, 73, 94], textColor: 255 },
@@ -139,48 +196,7 @@ export function generateInvoice(data: InvoiceData): void {
   
   currentY = (doc as any).lastAutoTable.finalY + 10;
   
-  // Payment Summary Box
-  doc.setDrawColor(41, 128, 185);
-  doc.setLineWidth(0.5);
-  doc.rect(120, currentY, 75, 35);
-  
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  
-  const summaryY = currentY + 7;
-  doc.text("Subtotal:", 125, summaryY);
-  doc.text(`₹${data.baseAmount.toLocaleString("en-IN")}`, 190, summaryY, { align: "right" });
-  
-  if (data.penaltyAmount > 0) {
-    doc.setTextColor(220, 38, 38);
-    doc.text("Penalty:", 125, summaryY + 6);
-    doc.text(`₹${data.penaltyAmount.toLocaleString("en-IN")}`, 190, summaryY + 6, { align: "right" });
-    doc.setTextColor(0, 0, 0);
-  }
-  
-  doc.setDrawColor(200);
-  doc.line(125, summaryY + 9, 190, summaryY + 9);
-  
-  doc.setFont("helvetica", "bold");
-  doc.text("Total Required:", 125, summaryY + 15);
-  doc.text(`₹${data.totalRequired.toLocaleString("en-IN")}`, 190, summaryY + 15, { align: "right" });
-  
-  doc.setTextColor(34, 197, 94);
-  doc.setFont("helvetica", "normal");
-  doc.text("Amount Paid:", 125, summaryY + 21);
-  doc.text(`₹${data.amountPaid.toLocaleString("en-IN")}`, 190, summaryY + 21, { align: "right" });
-  
-  doc.setDrawColor(200);
-  doc.line(125, summaryY + 23, 190, summaryY + 23);
-  
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Balance Due:", 125, summaryY + 29);
-  doc.text(`₹${data.remainingDue.toLocaleString("en-IN")}`, 190, summaryY + 29, { align: "right" });
-  
   // Terms & Conditions
-  currentY = currentY + 45;
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.text("Terms & Conditions:", 15, currentY);
@@ -188,10 +204,11 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   const terms = [
-    "• Payment must be made within 20 days of slab issue date",
-    "• Late payment penalty: ₹100 per slab per day after grace period",
-    "• Returns before full payment do not reduce the amount owed",
-    "• After full payment, new cycle begins with remaining slabs",
+    "• Payment must be made within the grace period (20 or 30 days depending on material type)",
+    "• Late payment penalty: ₹10 per item per day after grace period",
+    "• Returns before full payment do not reduce the amount owed for the grace period",
+    "• Lost items are charged at the penalty rate specified per material type",
+    "• Loading/Unloading charges apply unless customer provides own labor",
   ];
   
   terms.forEach((term, index) => {
