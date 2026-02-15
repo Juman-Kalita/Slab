@@ -13,6 +13,7 @@ import IssueMaterialsDialog from "@/components/IssueMaterialsDialog";
 import RecordMaterialReturnDialog from "@/components/RecordMaterialReturnDialog";
 import RecordPaymentDialog from "@/components/RecordPaymentDialog";
 import InventoryDialog from "@/components/InventoryDialog";
+import AddSiteDialog from "@/components/AddSiteDialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -26,8 +27,19 @@ const Dashboard = () => {
   const [returnOpen, setReturnOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
 
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const refresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    // If a customer is selected, refresh their data
+    if (selectedCustomer) {
+      const updatedCustomers = getCustomers();
+      const updatedCustomer = updatedCustomers.find(c => c.id === selectedCustomer.id);
+      if (updatedCustomer) {
+        setSelectedCustomer(updatedCustomer);
+      }
+    }
+  }, [selectedCustomer]);
 
   const stats = getDashboardStats();
   const customers = getCustomers();
@@ -92,7 +104,13 @@ const Dashboard = () => {
   };
 
   if (selectedCustomer) {
-    const customer = customers.find((c) => c.id === selectedCustomer.id) || selectedCustomer;
+    // Always get fresh customer data
+    const customer = customers.find((c) => c.id === selectedCustomer.id);
+    if (!customer) {
+      // Customer was deleted, go back to dashboard
+      setSelectedCustomer(null);
+      return null;
+    }
     
     return (
       <div className="min-h-screen bg-background">
@@ -108,9 +126,17 @@ const Dashboard = () => {
         </header>
 
         <main className="mx-auto max-w-6xl p-4 md:p-8 space-y-6">
-          <Button variant="ghost" onClick={() => setSelectedCustomer(null)} className="gap-1">
-            <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-          </Button>
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={() => setSelectedCustomer(null)} className="gap-1">
+              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+            </Button>
+            <Button 
+              onClick={() => setAddSiteOpen(true)} 
+              className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2"
+            >
+              <Plus className="h-4 w-4" /> Add New Site
+            </Button>
+          </div>
 
           <Card>
             <CardContent className="p-6 space-y-4">
@@ -218,7 +244,7 @@ const Dashboard = () => {
                         </div>
                       )}
                       <div className="flex justify-between pt-2 border-t">
-                        <span className="font-medium">Amount Paid:</span>
+                        <span className="font-medium">Amount Deposited:</span>
                         <span className="font-semibold text-green-600">₹{site.amountPaid.toLocaleString("en-IN")}</span>
                       </div>
                       <div className="flex justify-between pt-2 border-t">
@@ -260,6 +286,14 @@ const Dashboard = () => {
             })}
           </div>
         </main>
+
+        {/* Add Site Dialog for this customer */}
+        <AddSiteDialog 
+          open={addSiteOpen} 
+          onOpenChange={setAddSiteOpen} 
+          onSuccess={refresh}
+          customerName={customer.name}
+        />
       </div>
     );
   }

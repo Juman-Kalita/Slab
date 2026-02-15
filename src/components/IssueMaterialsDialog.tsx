@@ -126,6 +126,12 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       return;
     }
 
+    // Validate contact number
+    if (!contactNo || contactNo.length !== 10) {
+      toast.error("Please enter a valid 10-digit contact number");
+      return;
+    }
+
     // Validate all sites
     const validSites = siteLines.filter(site => 
       site.siteName && site.location && site.materials.some(m => m.materialTypeId && m.quantity)
@@ -262,13 +268,26 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="contactNo">Contact Number</Label>
+                <Label htmlFor="contactNo">Contact Number *</Label>
                 <Input
                   id="contactNo"
-                  placeholder="Phone number"
+                  placeholder="10-digit phone number"
                   value={contactNo}
-                  onChange={(e) => setContactNo(e.target.value)}
+                  onChange={(e) => {
+                    // Only allow numbers
+                    const value = e.target.value.replace(/\D/g, '');
+                    // Limit to 10 digits
+                    if (value.length <= 10) {
+                      setContactNo(value);
+                    }
+                  }}
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  required
                 />
+                {contactNo && contactNo.length !== 10 && (
+                  <p className="text-xs text-red-600">Phone number must be exactly 10 digits</p>
+                )}
               </div>
             </div>
 
