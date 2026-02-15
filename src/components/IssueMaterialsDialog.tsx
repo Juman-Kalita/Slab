@@ -3,9 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { issueMaterials, MATERIAL_TYPES, getMaterialType } from "@/lib/rental-store";
+import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock } from "@/lib/rental-store";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -22,31 +22,100 @@ interface MaterialLine {
   hasOwnLabor: boolean;
 }
 
+interface SiteLine {
+  id: string;
+  siteName: string;
+  location: string;
+  depositAmount: string;
+  materials: MaterialLine[];
+}
+
 const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsDialogProps) => {
   const [customerName, setCustomerName] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
-  const [materialLines, setMaterialLines] = useState<MaterialLine[]>([
-    { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }
+  const [siteLines, setSiteLines] = useState<SiteLine[]>([
+    {
+      id: crypto.randomUUID(),
+      siteName: "",
+      location: "",
+      depositAmount: "",
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
+    }
   ]);
-
-  const addMaterialLine = () => {
-    setMaterialLines([...materialLines, { 
-      id: crypto.randomUUID(), 
-      materialTypeId: "", 
-      quantity: "", 
-      hasOwnLabor: false 
+  
+  // Client details (for new customers)
+  const [registrationName, setRegistrationName] = useState("");
+  const [contactNo, setContactNo] = useState("");
+  const [aadharPhoto, setAadharPhoto] = useState<string>("");
+  const [address, setAddress] = useState("");
+  const [referral, setReferral] = useState("");
+  
+  const handleAadharUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("File size should be less than 2MB");
+        return;
+      }
+      
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAadharPhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const addSiteLine = () => {
+    setSiteLines([...siteLines, {
+      id: crypto.randomUUID(),
+      siteName: "",
+      location: "",
+      depositAmount: "",
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
     }]);
   };
 
-  const removeMaterialLine = (id: string) => {
-    if (materialLines.length > 1) {
-      setMaterialLines(materialLines.filter(line => line.id !== id));
+  const removeSiteLine = (siteId: string) => {
+    if (siteLines.length > 1) {
+      setSiteLines(siteLines.filter(site => site.id !== siteId));
     }
   };
 
-  const updateMaterialLine = (id: string, field: keyof MaterialLine, value: any) => {
-    setMaterialLines(materialLines.map(line => 
-      line.id === id ? { ...line, [field]: value } : line
+  const updateSiteLine = (siteId: string, field: 'siteName' | 'location' | 'depositAmount', value: string) => {
+    setSiteLines(siteLines.map(site =>
+      site.id === siteId ? { ...site, [field]: value } : site
+    ));
+  };
+
+  const addMaterialLine = (siteId: string) => {
+    setSiteLines(siteLines.map(site =>
+      site.id === siteId
+        ? { ...site, materials: [...site.materials, { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }] }
+        : site
+    ));
+  };
+
+  const removeMaterialLine = (siteId: string, materialId: string) => {
+    setSiteLines(siteLines.map(site =>
+      site.id === siteId && site.materials.length > 1
+        ? { ...site, materials: site.materials.filter(m => m.id !== materialId) }
+        : site
+    ));
+  };
+
+  const updateMaterialLine = (siteId: string, materialId: string, field: keyof MaterialLine, value: any) => {
+    setSiteLines(siteLines.map(site =>
+      site.id === siteId
+        ? {
+            ...site,
+            materials: site.materials.map(m =>
+              m.id === materialId ? { ...m, [field]: value } : m
+            )
+          }
+        : site
     ));
   };
 
@@ -57,43 +126,102 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       return;
     }
 
-    // Validate all lines
-    const validLines = materialLines.filter(line => line.materialTypeId && line.quantity);
-    if (validLines.length === 0) {
-      toast.error("Please add at least one material with quantity");
+    // Validate all sites
+    const validSites = siteLines.filter(site => 
+      site.siteName && site.location && site.materials.some(m => m.materialTypeId && m.quantity)
+    );
+
+    if (validSites.length === 0) {
+      toast.error("Please add at least one site with materials");
       return;
     }
 
-    // Check for invalid quantities
-    for (const line of validLines) {
-      const qty = parseInt(line.quantity);
-      if (isNaN(qty) || qty <= 0) {
-        toast.error("Please enter valid quantities for all materials");
+    // Process each site
+    let totalSitesProcessed = 0;
+    let totalMaterialsIssued = 0;
+
+    for (const site of validSites) {
+      const validMaterials = site.materials.filter(m => m.materialTypeId && m.quantity);
+      
+      // Validate deposit amount
+      const depositAmount = site.depositAmount ? parseFloat(site.depositAmount) : 0;
+      if (site.depositAmount && (isNaN(depositAmount) || depositAmount < 0)) {
+        toast.error(`Invalid deposit amount for ${site.siteName}`);
         return;
       }
+      
+      // Check quantities and stock for this site
+      for (const material of validMaterials) {
+        const qty = parseInt(material.quantity);
+        if (isNaN(qty) || qty <= 0) {
+          toast.error(`Invalid quantity for materials at ${site.siteName}`);
+          return;
+        }
+        
+        const available = getAvailableStock(material.materialTypeId);
+        if (qty > available) {
+          const mt = getMaterialType(material.materialTypeId);
+          toast.error(`Not enough stock for ${mt?.name} ${mt?.size} at ${site.siteName}. Available: ${available}`);
+          return;
+        }
+      }
+
+      // Issue all materials for this site
+      for (const material of validMaterials) {
+        const qty = parseInt(material.quantity);
+        const success = issueMaterials(
+          customerName,
+          site.siteName,
+          site.location,
+          material.materialTypeId,
+          qty,
+          issueDate,
+          material.hasOwnLabor,
+          depositAmount, // Pass deposit amount
+          {
+            registrationName: registrationName || undefined,
+            contactNo: contactNo || undefined,
+            aadharPhoto: aadharPhoto || undefined,
+            address: address || undefined,
+            referral: referral || undefined,
+          }
+        );
+        
+        if (success) {
+          totalMaterialsIssued++;
+        } else {
+          toast.error(`Failed to issue materials to ${site.siteName}`);
+          return;
+        }
+      }
+      
+      totalSitesProcessed++;
     }
 
-    // Issue all materials
-    let successCount = 0;
-    validLines.forEach(line => {
-      const qty = parseInt(line.quantity);
-      issueMaterials(customerName, line.materialTypeId, qty, issueDate, line.hasOwnLabor);
-      successCount++;
-    });
-
-    toast.success(`Issued ${successCount} material type(s) to ${customerName}`);
+    toast.success(`Issued materials to ${totalSitesProcessed} site(s) for ${customerName}`);
     
     // Reset form
     setCustomerName("");
+    setRegistrationName("");
+    setContactNo("");
+    setAadharPhoto("");
+    setAddress("");
+    setReferral("");
     setIssueDate(new Date().toISOString().split("T")[0]);
-    setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]);
+    setSiteLines([{
+      id: crypto.randomUUID(),
+      siteName: "",
+      location: "",
+      depositAmount: "",
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
+    }]);
     onSuccess();
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Issue Materials</DialogTitle>
         </DialogHeader>
@@ -118,96 +246,276 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             />
           </div>
 
+          {/* Client Details Section */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+            <h3 className="font-semibold text-sm">Client Details (Optional for new customers)</h3>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="registrationName">Registration Name</Label>
+                <Input
+                  id="registrationName"
+                  placeholder="Official registration name"
+                  value={registrationName}
+                  onChange={(e) => setRegistrationName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contactNo">Contact Number</Label>
+                <Input
+                  id="contactNo"
+                  placeholder="Phone number"
+                  value={contactNo}
+                  onChange={(e) => setContactNo(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                placeholder="Full address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referral">Referral (Who referred this customer?)</Label>
+              <Input
+                id="referral"
+                placeholder="Referral source"
+                value={referral}
+                onChange={(e) => setReferral(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="aadharPhoto">Aadhar Photo</Label>
+              <Input
+                id="aadharPhoto"
+                type="file"
+                accept="image/*"
+                onChange={handleAadharUpload}
+                className="cursor-pointer"
+              />
+              {aadharPhoto && (
+                <div className="mt-2">
+                  <img src={aadharPhoto} alt="Aadhar preview" className="max-w-xs rounded border" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Site Details */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Materials</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addMaterialLine} className="gap-1">
-                <Plus className="h-4 w-4" /> Add Material
+              <Label className="text-base font-semibold">Sites & Materials</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addSiteLine} className="gap-1">
+                <Plus className="h-4 w-4" /> Add Site
               </Button>
             </div>
 
-            {materialLines.map((line, index) => {
-              const selectedMaterial = getMaterialType(line.materialTypeId);
-              return (
-                <div key={line.id} className="border rounded-lg p-4 space-y-3 bg-muted/30">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label>Material Type</Label>
-                          <Select 
-                            value={line.materialTypeId} 
-                            onValueChange={(value) => updateMaterialLine(line.id, "materialTypeId", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select material" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MATERIAL_TYPES.map((material) => (
-                                <SelectItem key={material.id} value={material.id}>
-                                  {material.name} ({material.size}) - ₹{material.rentPerDay}/day
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Quantity</Label>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 10"
-                            value={line.quantity}
-                            onChange={(e) => updateMaterialLine(line.id, "quantity", e.target.value)}
-                            min="1"
-                          />
-                        </div>
-                      </div>
-
-                      {selectedMaterial && (
-                        <div className="rounded bg-background p-2 text-xs space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Rent/day:</span>
-                            <span className="font-semibold">₹{selectedMaterial.rentPerDay}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">LC&ULC:</span>
-                            <span className="font-semibold">₹{selectedMaterial.loadingCharge}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Lost penalty:</span>
-                            <span className="font-semibold">₹{selectedMaterial.lostItemPenalty}</span>
-                          </div>
-                        </div>
+            {siteLines.map((site, siteIndex) => (
+              <div key={site.id} className="border-2 rounded-lg p-4 space-y-3 bg-accent/5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-sm">Site {siteIndex + 1}</h3>
+                      {siteLines.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeSiteLine(site.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-2"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       )}
+                    </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`hasOwnLabor-${line.id}`}
-                          checked={line.hasOwnLabor}
-                          onCheckedChange={(checked) => updateMaterialLine(line.id, "hasOwnLabor", checked as boolean)}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor={`siteName-${site.id}`}>Site Name</Label>
+                        <Input
+                          id={`siteName-${site.id}`}
+                          placeholder="e.g. Building A, Tower 1"
+                          value={site.siteName}
+                          onChange={(e) => updateSiteLine(site.id, 'siteName', e.target.value)}
+                          required
                         />
-                        <Label htmlFor={`hasOwnLabor-${line.id}`} className="text-sm font-normal cursor-pointer">
-                          Own labor (No LC&ULC)
-                        </Label>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`location-${site.id}`}>Location/Region</Label>
+                        <Input
+                          id={`location-${site.id}`}
+                          placeholder="e.g. Mumbai, Pune"
+                          value={site.location}
+                          onChange={(e) => updateSiteLine(site.id, 'location', e.target.value)}
+                          required
+                        />
                       </div>
                     </div>
 
-                    {materialLines.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeMaterialLine(line.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <div className="space-y-2 bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-lg border-2 border-yellow-400 dark:border-yellow-600">
+                      <Label htmlFor={`deposit-${site.id}`} className="text-base font-semibold flex items-center gap-2">
+                        💰 Deposit Amount (₹)
+                      </Label>
+                      <Input
+                        id={`deposit-${site.id}`}
+                        type="number"
+                        placeholder="Enter deposit amount (optional)"
+                        value={site.depositAmount}
+                        onChange={(e) => updateSiteLine(site.id, 'depositAmount', e.target.value)}
+                        min="0"
+                        step="0.01"
+                        className="text-lg font-semibold"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This amount will be deducted from the total charges
+                      </p>
+                    </div>
+
+                    {/* Materials for this site */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Materials</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addMaterialLine(site.id)}
+                          className="gap-1 h-7 text-xs"
+                        >
+                          <Plus className="h-3 w-3" /> Add Material
+                        </Button>
+                      </div>
+
+                      {site.materials.map((material) => {
+                        const selectedMaterial = getMaterialType(material.materialTypeId);
+                        const availableStock = material.materialTypeId ? getAvailableStock(material.materialTypeId) : 0;
+                        const categories = Array.from(new Set(MATERIAL_TYPES.map(m => m.category)));
+
+                        return (
+                          <div key={material.id} className="border rounded-lg p-3 space-y-2 bg-background">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Material Type</Label>
+                                    <Select
+                                      value={material.materialTypeId}
+                                      onValueChange={(value) => updateMaterialLine(site.id, material.id, "materialTypeId", value)}
+                                    >
+                                      <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Select material" />
+                                      </SelectTrigger>
+                                      <SelectContent className="max-h-[300px]">
+                                        {categories.map((category, catIndex) => (
+                                          <div key={category}>
+                                            {catIndex > 0 && <div className="h-px bg-border my-1" />}
+                                            <SelectGroup>
+                                              <SelectLabel className="font-bold text-primary bg-accent/20 px-2 py-1 sticky top-0 z-10 text-xs">
+                                                {category}
+                                              </SelectLabel>
+                                              {MATERIAL_TYPES.filter(m => m.category === category).map((mt) => {
+                                                const stock = getAvailableStock(mt.id);
+                                                return (
+                                                  <SelectItem
+                                                    key={mt.id}
+                                                    value={mt.id}
+                                                    disabled={stock === 0}
+                                                    className="pl-6 text-xs"
+                                                  >
+                                                    <div className="flex items-center justify-between w-full gap-2">
+                                                      <span>
+                                                        {mt.name} {mt.size && `(${mt.size})`} - ₹{mt.rentPerDay}/day
+                                                      </span>
+                                                      <span className={`text-xs font-semibold ${stock === 0 ? 'text-red-600' : stock < 10 ? 'text-orange-600' : 'text-green-600'}`}>
+                                                        [{stock}]
+                                                      </span>
+                                                    </div>
+                                                  </SelectItem>
+                                                );
+                                              })}
+                                            </SelectGroup>
+                                          </div>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Quantity</Label>
+                                    <Input
+                                      type="number"
+                                      placeholder="e.g. 10"
+                                      value={material.quantity}
+                                      onChange={(e) => updateMaterialLine(site.id, material.id, "quantity", e.target.value)}
+                                      min="1"
+                                      max={availableStock}
+                                      className="h-9"
+                                    />
+                                    {selectedMaterial && (
+                                      <p className="text-xs text-muted-foreground">
+                                        Available: <span className={availableStock < 10 ? 'text-orange-600 font-semibold' : 'text-green-600 font-semibold'}>{availableStock}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {selectedMaterial && (
+                                  <div className="rounded bg-muted p-2 text-xs space-y-0.5">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Rent/day:</span>
+                                      <span className="font-semibold">₹{selectedMaterial.rentPerDay}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">LC&ULC:</span>
+                                      <span className="font-semibold">₹{selectedMaterial.loadingCharge}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Grace period:</span>
+                                      <span className="font-semibold">{selectedMaterial.gracePeriodDays} days</span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`hasOwnLabor-${material.id}`}
+                                    checked={material.hasOwnLabor}
+                                    onCheckedChange={(checked) => updateMaterialLine(site.id, material.id, "hasOwnLabor", checked as boolean)}
+                                  />
+                                  <Label htmlFor={`hasOwnLabor-${material.id}`} className="text-xs font-normal cursor-pointer">
+                                    Own labor (No LC&ULC)
+                                  </Label>
+                                </div>
+                              </div>
+
+                              {site.materials.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeMaterialLine(site.id, material.id)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-2"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">

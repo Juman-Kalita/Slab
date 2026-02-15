@@ -16,19 +16,21 @@ interface RecordMaterialReturnDialogProps {
 
 const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMaterialReturnDialogProps) => {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedSiteId, setSelectedSiteId] = useState("");
   const [selectedMaterialTypeId, setSelectedMaterialTypeId] = useState("");
   const [quantityReturned, setQuantityReturned] = useState("");
   const [quantityLost, setQuantityLost] = useState("0");
   const [hasOwnLabor, setHasOwnLabor] = useState(false);
 
-  const customers = getCustomers().filter((c) => c.materials.length > 0);
+  const customers = getCustomers().filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
-  const selectedMaterial = selectedCustomer?.materials.find(m => m.materialTypeId === selectedMaterialTypeId);
+  const selectedSite = selectedCustomer?.sites.find(s => s.id === selectedSiteId);
+  const selectedMaterial = selectedSite?.materials.find(m => m.materialTypeId === selectedMaterialTypeId);
   const materialType = selectedMaterial ? getMaterialType(selectedMaterial.materialTypeId) : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustomerId || !selectedMaterialTypeId || !quantityReturned) {
+    if (!selectedCustomerId || !selectedSiteId || !selectedMaterialTypeId || !quantityReturned) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -51,11 +53,12 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMat
       return;
     }
 
-    const success = recordReturn(selectedCustomerId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
+    const success = recordReturn(selectedCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
     if (success) {
       const lostMessage = qtyLost > 0 ? ` (${qtyLost} lost)` : "";
       toast.success(`Recorded return of ${qtyReturned} items${lostMessage}`);
       setSelectedCustomerId("");
+      setSelectedSiteId("");
       setSelectedMaterialTypeId("");
       setQuantityReturned("");
       setQuantityLost("0");
@@ -78,6 +81,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMat
             <Label htmlFor="customer">Customer</Label>
             <Select value={selectedCustomerId} onValueChange={(value) => {
               setSelectedCustomerId(value);
+              setSelectedSiteId("");
               setSelectedMaterialTypeId("");
             }}>
               <SelectTrigger id="customer">
@@ -99,13 +103,37 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMat
 
           {selectedCustomer && (
             <div className="space-y-2">
+              <Label htmlFor="site">Site</Label>
+              <Select value={selectedSiteId} onValueChange={(value) => {
+                setSelectedSiteId(value);
+                setSelectedMaterialTypeId("");
+              }}>
+                <SelectTrigger id="site">
+                  <SelectValue placeholder="Select site" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedCustomer.sites.filter(s => s.materials.some(m => m.quantity > 0)).map((s) => {
+                    const totalItems = s.materials.reduce((sum, m) => sum + m.quantity, 0);
+                    return (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.siteName} ({s.location}) - {totalItems} items
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {selectedSite && (
+            <div className="space-y-2">
               <Label htmlFor="material">Material Type</Label>
               <Select value={selectedMaterialTypeId} onValueChange={setSelectedMaterialTypeId}>
                 <SelectTrigger id="material">
                   <SelectValue placeholder="Select material" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedCustomer.materials.map((m) => {
+                  {selectedSite.materials.filter(m => m.quantity > 0).map((m) => {
                     const mt = getMaterialType(m.materialTypeId);
                     return (
                       <SelectItem key={m.materialTypeId} value={m.materialTypeId}>

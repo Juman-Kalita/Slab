@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCustomers, recordPayment, calculateRent, type Customer } from "@/lib/rental-store";
+import { getCustomers, recordPayment, calculateSiteRent, type Customer } from "@/lib/rental-store";
 import { generateInvoice, generateInvoiceNumber } from "@/lib/invoice-generator";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
@@ -17,16 +17,18 @@ interface RecordPaymentDialogProps {
 
 const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDialogProps) => {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedSiteId, setSelectedSiteId] = useState("");
   const [amount, setAmount] = useState("");
 
-  const customers = getCustomers().filter((c) => c.materials.length > 0);
+  const customers = getCustomers().filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
-  const calculatedRent = selectedCustomer ? calculateRent(selectedCustomer) : null;
+  const selectedSite = selectedCustomer?.sites.find(s => s.id === selectedSiteId);
+  const calculatedRent = selectedSite ? calculateSiteRent(selectedSite) : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustomerId || !amount) {
-      toast.error("Please select a customer and enter amount");
+    if (!selectedCustomerId || !selectedSiteId || !amount) {
+      toast.error("Please select a customer, site, and enter amount");
       return;
     }
 
@@ -36,14 +38,12 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
       return;
     }
 
-    const customer = customers.find((c) => c.id === selectedCustomerId);
-    if (!customer) return;
-
-    const success = recordPayment(selectedCustomerId, amountNum);
+    const success = recordPayment(selectedCustomerId, selectedSiteId, amountNum);
     if (success) {
       toast.success("Payment recorded successfully!");
       
       setSelectedCustomerId("");
+      setSelectedSiteId("");
       setAmount("");
       onSuccess();
       onOpenChange(false);
@@ -61,7 +61,10 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="customer">Customer</Label>
-            <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+            <Select value={selectedCustomerId} onValueChange={(value) => {
+              setSelectedCustomerId(value);
+              setSelectedSiteId("");
+            }}>
               <SelectTrigger id="customer">
                 <SelectValue placeholder="Select customer" />
               </SelectTrigger>
@@ -69,18 +72,36 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
                 {customers.length === 0 ? (
                   <div className="p-2 text-sm text-muted-foreground">No customers with materials</div>
                 ) : (
-                  customers.map((c) => {
-                    const totalItems = c.materials.reduce((sum, m) => sum + m.quantity, 0);
-                    return (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} - {totalItems} items
-                      </SelectItem>
-                    );
-                  })
+                  customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))
                 )}
               </SelectContent>
             </Select>
           </div>
+
+          {selectedCustomer && (
+            <div className="space-y-2">
+              <Label htmlFor="site">Site</Label>
+              <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
+                <SelectTrigger id="site">
+                  <SelectValue placeholder="Select site" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedCustomer.sites.filter(s => s.materials.some(m => m.quantity > 0)).map((s) => {
+                    const totalItems = s.materials.reduce((sum, m) => sum + m.quantity, 0);
+                    return (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.siteName} ({s.location}) - {totalItems} items
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {calculatedRent && (
             <div className="rounded-lg bg-muted p-4 space-y-2 text-sm">
@@ -119,7 +140,7 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess }: RecordPaymentDia
                 <span className="font-bold text-lg text-accent">₹{calculatedRent.remainingDue.toLocaleString("en-IN")}</span>
               </div>
               {calculatedRent.isWithinGracePeriod ? (
-                <div className="text-xs text-green-600">Within 20-day grace period</div>
+                <div className="text-xs text-green-600">Within grace period</div>
               ) : (
                 <div className="text-xs text-red-600">Overdue by {calculatedRent.daysOverdue} days</div>
               )}

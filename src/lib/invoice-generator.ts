@@ -1,11 +1,11 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
-import type { Customer, MaterialType } from "./rental-store";
-import { getMaterialType } from "./rental-store";
+import type { Customer, MaterialType, Site } from "./rental-store";
 
 interface InvoiceData {
   customer: Customer;
+  site: Site;
   invoiceNumber: string;
   invoiceDate: string;
   rentAmount: number;
@@ -51,7 +51,7 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setFont("helvetica", "normal");
   doc.text(data.invoiceNumber, 170, 46);
   doc.text(format(new Date(data.invoiceDate), "dd MMM yyyy"), 170, 52);
-  doc.text(format(new Date(data.customer.issueDate), "dd MMM yyyy"), 170, 58);
+  doc.text(format(new Date(data.site.issueDate), "dd MMM yyyy"), 170, 58);
   
   // Customer Details
   doc.setFontSize(11);
@@ -61,21 +61,30 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text(data.customer.name, 15, 52);
-  doc.text(`Customer ID: ${data.customer.id.substring(0, 8)}`, 15, 58);
+  if (data.customer.contactNo) {
+    doc.text(`Contact: ${data.customer.contactNo}`, 15, 58);
+  }
+  
+  // Site Details
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("Site:", 15, 64);
+  doc.setFont("helvetica", "normal");
+  doc.text(`${data.site.siteName}, ${data.site.location}`, 15, 69);
   
   // Status Badge
   if (data.isWithinGracePeriod) {
     doc.setFillColor(34, 197, 94);
-    doc.roundedRect(15, 62, 45, 6, 2, 2, "F");
+    doc.roundedRect(15, 73, 45, 6, 2, 2, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
-    doc.text("Within Grace Period", 17, 66);
+    doc.text("Within Grace Period", 17, 77);
   } else {
     doc.setFillColor(239, 68, 68);
-    doc.roundedRect(15, 62, 45, 6, 2, 2, "F");
+    doc.roundedRect(15, 73, 45, 6, 2, 2, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
-    doc.text(`Overdue by ${data.daysOverdue} days`, 17, 66);
+    doc.text(`Overdue by ${data.daysOverdue} days`, 17, 77);
   }
   doc.setTextColor(0, 0, 0);
   
@@ -88,7 +97,7 @@ export function generateInvoice(data: InvoiceData): void {
   ]);
   
   autoTable(doc, {
-    startY: 80,
+    startY: 85,
     head: [["Material", "Issued", "Held", "Rate/Day"]],
     body: materialRows,
     theme: "grid",
@@ -120,8 +129,8 @@ export function generateInvoice(data: InvoiceData): void {
   }
   
   breakdown.push(["Subtotal", `₹${(data.rentAmount + data.issueLoadingCharges + data.penaltyAmount).toLocaleString("en-IN")}`]);
-  breakdown.push(["Less: Paid", `-₹${data.customer.amountPaid.toLocaleString("en-IN")}`]);
-  breakdown.push(["Unpaid from Grace Period", `₹${Math.max(0, data.rentAmount + data.issueLoadingCharges + data.penaltyAmount - data.customer.amountPaid).toLocaleString("en-IN")}`]);
+  breakdown.push(["Less: Paid", `-₹${data.site.amountPaid.toLocaleString("en-IN")}`]);
+  breakdown.push(["Unpaid from Grace Period", `₹${Math.max(0, data.rentAmount + data.issueLoadingCharges + data.penaltyAmount - data.site.amountPaid).toLocaleString("en-IN")}`]);
   
   if (data.returnLoadingCharges > 0 || data.lostItemsPenalty > 0) {
     breakdown.push(["", ""]);
@@ -165,16 +174,16 @@ export function generateInvoice(data: InvoiceData): void {
   currentY += 20;
   
   // Items Summary
-  const totalIssued = data.customer.history
-    .filter(h => h.action === "Issued")
+  const totalIssued = data.site.history
+    .filter((h) => h.action === "Issued")
     .reduce((sum, h) => sum + (h.quantity || 0), 0);
   
-  const totalReturned = data.customer.history
-    .filter(h => h.action === "Returned")
+  const totalReturned = data.site.history
+    .filter((h) => h.action === "Returned")
     .reduce((sum, h) => sum + (h.quantity || 0), 0);
   
-  const currentlyHeld = data.customer.materials
-    .filter(m => m.quantity > 0)
+  const currentlyHeld = data.site.materials
+    .filter((m) => m.quantity > 0)
     .reduce((sum, m) => sum + m.quantity, 0);
   
   autoTable(doc, {
@@ -224,7 +233,7 @@ export function generateInvoice(data: InvoiceData): void {
   doc.text(`Generated on ${format(new Date(), "dd MMM yyyy, hh:mm a")}`, 105, 290, { align: "center" });
   
   // Save PDF
-  const fileName = `Invoice_${data.invoiceNumber}_${data.customer.name.replace(/\s+/g, "_")}.pdf`;
+  const fileName = `Invoice_${data.invoiceNumber}_${data.customer.name.replace(/\s+/g, "_")}_${data.site.siteName.replace(/\s+/g, "_")}.pdf`;
   doc.save(fileName);
 }
 
