@@ -138,9 +138,32 @@ const Dashboard = () => {
             </Button>
           </div>
 
+          {/* Quick Actions for this customer */}
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => setReturnOpen(true)} variant="outline" className="gap-2 font-semibold">
+              <RotateCcw className="h-4 w-4" /> Record Return
+            </Button>
+            <Button onClick={() => setPaymentOpen(true)} variant="outline" className="gap-2 font-semibold">
+              <Wallet className="h-4 w-4" /> Record Payment/Deposit
+            </Button>
+            <Button onClick={() => setInventoryOpen(true)} variant="outline" className="gap-2 font-semibold">
+              <PackageSearch className="h-4 w-4" /> View Inventory
+            </Button>
+          </div>
+
           <Card>
             <CardContent className="p-6 space-y-4">
-              <h2 className="text-2xl font-bold">{customer.name}</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">{customer.name}</h2>
+                {customer.advanceDeposit > 0 && (
+                  <div className="bg-green-100 dark:bg-green-900/20 border-2 border-green-500 rounded-lg px-4 py-2">
+                    <div className="text-xs text-green-700 dark:text-green-400 font-medium">Advance Deposit</div>
+                    <div className="text-xl font-bold text-green-600 dark:text-green-400">
+                      ₹{customer.advanceDeposit.toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                )}
+              </div>
               
               {/* Client Details Section */}
               {(customer.registrationName || customer.contactNo || customer.address || customer.referral || customer.aadharPhoto) && (
@@ -253,6 +276,27 @@ const Dashboard = () => {
                       </div>
                     </div>
 
+                    {/* Payment Methods Used */}
+                    {(() => {
+                      const paymentEvents = site.history.filter(h => h.action === "Payment" && h.paymentMethod);
+                      if (paymentEvents.length > 0) {
+                        const paymentMethods = Array.from(new Set(paymentEvents.map(p => p.paymentMethod)));
+                        return (
+                          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20">
+                            <div className="text-xs text-muted-foreground mb-1">Payment Methods Used:</div>
+                            <div className="flex flex-wrap gap-2">
+                              {paymentMethods.map((method, idx) => (
+                                <span key={idx} className="inline-flex items-center px-2 py-1 rounded-md bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                                  {method}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {/* Materials at this site */}
                     {site.materials.filter(m => m.quantity > 0).length > 0 && (
                       <div className="border-t pt-4">
@@ -287,7 +331,20 @@ const Dashboard = () => {
           </div>
         </main>
 
-        {/* Add Site Dialog for this customer */}
+        {/* Dialogs for this customer */}
+        <RecordMaterialReturnDialog 
+          open={returnOpen} 
+          onOpenChange={setReturnOpen} 
+          onSuccess={refresh}
+          preSelectedCustomerId={customer.id}
+        />
+        <RecordPaymentDialog 
+          open={paymentOpen} 
+          onOpenChange={setPaymentOpen} 
+          onSuccess={refresh}
+          preSelectedCustomerId={customer.id}
+        />
+        <InventoryDialog open={inventoryOpen} onOpenChange={setInventoryOpen} />
         <AddSiteDialog 
           open={addSiteOpen} 
           onOpenChange={setAddSiteOpen} 
@@ -342,7 +399,7 @@ const Dashboard = () => {
             <RotateCcw className="h-4 w-4" /> Record Return
           </Button>
           <Button onClick={() => setPaymentOpen(true)} variant="outline" className="gap-2 font-semibold">
-            <Wallet className="h-4 w-4" /> Record Payment
+            <Wallet className="h-4 w-4" /> Record Payment/Deposit
           </Button>
           <Button onClick={() => setInventoryOpen(true)} variant="outline" className="gap-2 font-semibold">
             <PackageSearch className="h-4 w-4" /> View Inventory

@@ -12,9 +12,10 @@ interface RecordMaterialReturnDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  preSelectedCustomerId?: string; // Optional pre-selected customer
 }
 
-const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMaterialReturnDialogProps) => {
+const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelectedCustomerId }: RecordMaterialReturnDialogProps) => {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [selectedMaterialTypeId, setSelectedMaterialTypeId] = useState("");
@@ -22,15 +23,18 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMat
   const [quantityLost, setQuantityLost] = useState("0");
   const [hasOwnLabor, setHasOwnLabor] = useState(false);
 
+  // Use pre-selected customer if provided
+  const effectiveCustomerId = preSelectedCustomerId || selectedCustomerId;
+  
   const customers = getCustomers().filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
-  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
+  const selectedCustomer = customers.find((c) => c.id === effectiveCustomerId);
   const selectedSite = selectedCustomer?.sites.find(s => s.id === selectedSiteId);
   const selectedMaterial = selectedSite?.materials.find(m => m.materialTypeId === selectedMaterialTypeId);
   const materialType = selectedMaterial ? getMaterialType(selectedMaterial.materialTypeId) : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustomerId || !selectedSiteId || !selectedMaterialTypeId || !quantityReturned) {
+    if (!effectiveCustomerId || !selectedSiteId || !selectedMaterialTypeId || !quantityReturned) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -53,7 +57,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMat
       return;
     }
 
-    const success = recordReturn(selectedCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
+    const success = recordReturn(effectiveCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
     if (success) {
       const lostMessage = qtyLost > 0 ? ` (${qtyLost} lost)` : "";
       toast.success(`Recorded return of ${qtyReturned} items${lostMessage}`);
@@ -77,29 +81,38 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess }: RecordMat
           <DialogTitle>Record Material Return</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="customer">Customer</Label>
-            <Select value={selectedCustomerId} onValueChange={(value) => {
-              setSelectedCustomerId(value);
-              setSelectedSiteId("");
-              setSelectedMaterialTypeId("");
-            }}>
-              <SelectTrigger id="customer">
-                <SelectValue placeholder="Select customer" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground">No customers with materials</div>
-                ) : (
-                  customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {!preSelectedCustomerId && (
+            <div className="space-y-2">
+              <Label htmlFor="customer">Customer</Label>
+              <Select value={selectedCustomerId} onValueChange={(value) => {
+                setSelectedCustomerId(value);
+                setSelectedSiteId("");
+                setSelectedMaterialTypeId("");
+              }}>
+                <SelectTrigger id="customer">
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">No customers with materials</div>
+                  ) : (
+                    customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {preSelectedCustomerId && selectedCustomer && (
+            <div className="rounded-lg bg-accent/10 p-3 border">
+              <Label className="text-sm text-muted-foreground">Customer</Label>
+              <p className="font-semibold">{selectedCustomer.name}</p>
+            </div>
+          )}
 
           {selectedCustomer && (
             <div className="space-y-2">

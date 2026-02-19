@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock } from "@/lib/rental-store";
+import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock, getCustomers } from "@/lib/rental-store";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -26,7 +26,6 @@ interface SiteLine {
   id: string;
   siteName: string;
   location: string;
-  depositAmount: string;
   materials: MaterialLine[];
 }
 
@@ -38,7 +37,6 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      depositAmount: "",
       materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
     }
   ]);
@@ -49,6 +47,11 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
   const [aadharPhoto, setAadharPhoto] = useState<string>("");
   const [address, setAddress] = useState("");
   const [referral, setReferral] = useState("");
+  
+  // Check if customer exists and has advance deposit
+  const customers = getCustomers();
+  const existingCustomer = customers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
+  const hasAdvanceDeposit = existingCustomer && existingCustomer.advanceDeposit > 0;
   
   const handleAadharUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -73,7 +76,6 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      depositAmount: "",
       materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
     }]);
   };
@@ -84,7 +86,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
     }
   };
 
-  const updateSiteLine = (siteId: string, field: 'siteName' | 'location' | 'depositAmount', value: string) => {
+  const updateSiteLine = (siteId: string, field: 'siteName' | 'location', value: string) => {
     setSiteLines(siteLines.map(site =>
       site.id === siteId ? { ...site, [field]: value } : site
     ));
@@ -149,13 +151,6 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
     for (const site of validSites) {
       const validMaterials = site.materials.filter(m => m.materialTypeId && m.quantity);
       
-      // Validate deposit amount
-      const depositAmount = site.depositAmount ? parseFloat(site.depositAmount) : 0;
-      if (site.depositAmount && (isNaN(depositAmount) || depositAmount < 0)) {
-        toast.error(`Invalid deposit amount for ${site.siteName}`);
-        return;
-      }
-      
       // Check quantities and stock for this site
       for (const material of validMaterials) {
         const qty = parseInt(material.quantity);
@@ -183,7 +178,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
           qty,
           issueDate,
           material.hasOwnLabor,
-          depositAmount, // Pass deposit amount
+          0, // No deposit during issuance
           {
             registrationName: registrationName || undefined,
             contactNo: contactNo || undefined,
@@ -218,7 +213,6 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      depositAmount: "",
       materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
     }]);
     onSuccess();
@@ -240,6 +234,16 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
             />
+            {hasAdvanceDeposit && existingCustomer && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-500 rounded-lg p-3 text-sm">
+                <p className="text-green-700 dark:text-green-400 font-medium">
+                  ✓ Customer has advance deposit of ₹{existingCustomer.advanceDeposit.toLocaleString("en-IN")}
+                </p>
+                <p className="text-green-600 dark:text-green-300 text-xs mt-1">
+                  This will be automatically applied to the new materials
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -377,25 +381,6 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                           required
                         />
                       </div>
-                    </div>
-
-                    <div className="space-y-2 bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-lg border-2 border-yellow-400 dark:border-yellow-600">
-                      <Label htmlFor={`deposit-${site.id}`} className="text-base font-semibold flex items-center gap-2">
-                        💰 Deposit Amount (₹)
-                      </Label>
-                      <Input
-                        id={`deposit-${site.id}`}
-                        type="number"
-                        placeholder="Enter deposit amount (optional)"
-                        value={site.depositAmount}
-                        onChange={(e) => updateSiteLine(site.id, 'depositAmount', e.target.value)}
-                        min="0"
-                        step="0.01"
-                        className="text-lg font-semibold"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        This amount will be deducted from the total charges
-                      </p>
                     </div>
 
                     {/* Materials for this site */}

@@ -26,7 +26,6 @@ interface MaterialLine {
 const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteDialogProps) => {
   const [siteName, setSiteName] = useState("");
   const [location, setLocation] = useState("");
-  const [depositAmount, setDepositAmount] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [materialLines, setMaterialLines] = useState<MaterialLine[]>([
     { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }
@@ -67,13 +66,6 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
       return;
     }
 
-    // Validate deposit amount
-    const deposit = depositAmount ? parseFloat(depositAmount) : 0;
-    if (depositAmount && (isNaN(deposit) || deposit < 0)) {
-      toast.error("Invalid deposit amount");
-      return;
-    }
-
     // Check for invalid quantities and stock availability
     for (const line of validLines) {
       const qty = parseInt(line.quantity);
@@ -102,7 +94,7 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
         qty, 
         issueDate, 
         line.hasOwnLabor,
-        deposit
+        0 // No deposit during site addition
       );
       if (success) {
         successCount++;
@@ -117,7 +109,6 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
     // Reset form
     setSiteName("");
     setLocation("");
-    setDepositAmount("");
     setIssueDate(new Date().toISOString().split("T")[0]);
     setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]);
     onSuccess();
@@ -154,31 +145,14 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="issueDate">Issue Date</Label>
-              <Input
-                id="issueDate"
-                type="date"
-                value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2 bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-lg border-2 border-yellow-400 dark:border-yellow-600">
-              <Label htmlFor="depositAmount" className="font-semibold flex items-center gap-2">
-                💰 Deposit Amount (₹)
-              </Label>
-              <Input
-                id="depositAmount"
-                type="number"
-                placeholder="Enter deposit (optional)"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-                min="0"
-                step="0.01"
-                className="font-semibold"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="issueDate">Issue Date</Label>
+            <Input
+              id="issueDate"
+              type="date"
+              value={issueDate}
+              onChange={(e) => setIssueDate(e.target.value)}
+            />
           </div>
 
           <div className="space-y-3">

@@ -14,12 +14,12 @@ export interface MaterialType {
 }
 
 export const MATERIAL_TYPES: MaterialType[] = [
-  // PLATES Category - 20 Days
-  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, loadingCharge: 2, lostItemPenalty: 1200, gracePeriodDays: 20, inventory: 7500 },
-  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 20, inventory: 956 },
-  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 20, inventory: 248 },
-  { id: "change-plate-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, loadingCharge: 2, lostItemPenalty: 1200, gracePeriodDays: 20, inventory: 1461 },
-  { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 20, inventory: 1 },
+  // PLATES Category - 30 Days
+  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, loadingCharge: 2, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 7500 },
+  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 956 },
+  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 30, inventory: 248 },
+  { id: "change-plate-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, loadingCharge: 2, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1461 },
+  { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
   
   // PROPS Category - 30 Days
   { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
@@ -110,6 +110,7 @@ export interface HistoryEvent {
   amount?: number; // For payment records
   hasOwnLabor?: boolean;
   quantityLost?: number;
+  paymentMethod?: string; // Payment method used (Father, Mother, Own, Cash, or custom)
 }
 
 export interface Site {
@@ -135,6 +136,7 @@ export interface Customer {
   referral?: string; // Referral source (who referred this customer)
   sites: Site[]; // Multiple sites for this customer
   createdDate: string; // When customer was created
+  advanceDeposit: number; // Customer-level advance deposit (excess payments)
 }
 
 const STORAGE_KEY = "rental_customers";
@@ -243,7 +245,8 @@ export function getCustomers(): Customer[] {
     return {
       ...c,
       sites: c.sites || [],
-      createdDate: c.createdDate || new Date().toISOString()
+      createdDate: c.createdDate || new Date().toISOString(),
+      advanceDeposit: c.advanceDeposit || 0 // Initialize advance deposit
     };
   });
 }
@@ -262,8 +265,8 @@ export function issueMaterials(
   name: string,
   siteName: string,
   location: string,
-  materialTypeId: string, 
-  quantity: number, 
+  materialTypeId: string,
+  quantity: number,
   issueDate: string,
   hasOwnLabor: boolean,
   depositAmount: number = 0,
@@ -280,23 +283,23 @@ export function issueMaterials(
   if (available < quantity) {
     return false; // Not enough stock
   }
-  
+
   const customers = getCustomers();
   const existing = customers.find((c) => c.name.toLowerCase() === name.toLowerCase());
 
   const materialType = getMaterialType(materialTypeId);
   if (!materialType) return false;
-  
+
   const rentCharge = quantity * materialType.rentPerDay * materialType.gracePeriodDays;
   const issueLC = hasOwnLabor ? 0 : quantity * materialType.loadingCharge;
 
   if (existing) {
     // Find or create site for this customer
-    let site = existing.sites.find(s => 
-      s.siteName.toLowerCase() === siteName.toLowerCase() && 
+    let site = existing.sites.find(s =>
+      s.siteName.toLowerCase() === siteName.toLowerCase() &&
       s.location.toLowerCase() === location.toLowerCase()
     );
-    
+
     if (site) {
       // Add to existing site
       const existingMaterial = site.materials.find(m => m.materialTypeId === materialTypeId);
@@ -322,7 +325,21 @@ export function issueMaterials(
       });
       site.originalRentCharge += rentCharge;
       site.originalIssueLC += issueLC;
-      
+
+      // Auto-apply customer advance deposit to this site
+      if (existing.advanceDeposit > 0) {
+        const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
+        existing.advanceDeposit -= amountToApply;
+        site.amountPaid += amountToApply;
+        site.history.push({
+          date: issueDate,
+          action: "Payment",
+          siteId: site.id,
+          amount: amountToApply,
+          paymentMethod: "Advance Deposit"
+        });
+      }
+
       // Add deposit as payment if provided
       if (depositAmount > 0) {
         site.amountPaid += depositAmount;
@@ -330,7 +347,8 @@ export function issueMaterials(
           date: issueDate,
           action: "Payment",
           siteId: site.id,
-          amount: depositAmount
+          amount: depositAmount,
+          paymentMethod: "Cash"
         });
       }
     } else {
@@ -347,7 +365,7 @@ export function issueMaterials(
           issueDate,
           hasOwnLabor
         }],
-        amountPaid: depositAmount, // Set initial deposit
+        amountPaid: 0,
         lastSettlementDate: null,
         originalRentCharge: rentCharge,
         originalIssueLC: issueLC,
@@ -358,17 +376,36 @@ export function issueMaterials(
             materialTypeId,
             quantity,
             hasOwnLabor
-          },
-          ...(depositAmount > 0 ? [{
-            date: issueDate,
-            action: "Payment" as const,
-            siteId: "",
-            amount: depositAmount
-          }] : [])
+          }
         ]
       };
-      // Set siteId in history after creating the site
-      newSite.history.forEach(h => { if (h.siteId !== undefined) h.siteId = newSite.id; });
+
+      // Auto-apply customer advance deposit to new site
+      if (existing.advanceDeposit > 0) {
+        const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
+        existing.advanceDeposit -= amountToApply;
+        newSite.amountPaid += amountToApply;
+        newSite.history.push({
+          date: issueDate,
+          action: "Payment",
+          siteId: newSite.id,
+          amount: amountToApply,
+          paymentMethod: "Advance Deposit"
+        });
+      }
+
+      // Add deposit if provided
+      if (depositAmount > 0) {
+        newSite.amountPaid += depositAmount;
+        newSite.history.push({
+          date: issueDate,
+          action: "Payment",
+          siteId: newSite.id,
+          amount: depositAmount,
+          paymentMethod: "Cash"
+        });
+      }
+
       existing.sites.push(newSite);
     }
   } else {
@@ -401,13 +438,14 @@ export function issueMaterials(
           date: issueDate,
           action: "Payment" as const,
           siteId: "",
-          amount: depositAmount
+          amount: depositAmount,
+          paymentMethod: "Cash"
         }] : [])
       ]
     };
     // Set siteId in history after creating the site
     newSite.history.forEach(h => { if (h.siteId !== undefined) h.siteId = newSite.id; });
-    
+
     customers.push({
       id: crypto.randomUUID(),
       name,
@@ -417,13 +455,14 @@ export function issueMaterials(
       address: clientDetails?.address,
       referral: clientDetails?.referral,
       sites: [newSite],
-      createdDate: new Date().toISOString()
+      createdDate: new Date().toISOString(),
+      advanceDeposit: 0 // Initialize with no advance deposit
     });
   }
 
   // Update inventory (subtract issued quantity)
   updateInventory(materialTypeId, -quantity);
-  
+
   saveCustomers(customers);
   return true;
 }
@@ -629,7 +668,7 @@ export function calculateRent(customer: Customer): {
 }
 
 // Record payment
-export function recordPayment(customerId: string, siteId: string, amount: number): boolean {
+export function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string): boolean {
   const customers = getCustomers();
   const customer = customers.find((c) => c.id === customerId);
   if (!customer) return false;
@@ -637,17 +676,51 @@ export function recordPayment(customerId: string, siteId: string, amount: number
   const site = customer.sites.find(s => s.id === siteId);
   if (!site) return false;
 
-  site.amountPaid += amount;
-  site.history.push({
-    date: new Date().toISOString(),
-    action: "Payment",
-    siteId: site.id,
-    amount,
-  });
+  // Calculate what's owed for this site
+  const siteCalc = calculateSiteRent(site);
+  const siteOwed = siteCalc.remainingDue;
+
+  // First, try to use customer's advance deposit
+  let remainingAmount = amount;
+  let usedAdvance = 0;
+  
+  if (customer.advanceDeposit > 0 && siteOwed > 0) {
+    usedAdvance = Math.min(customer.advanceDeposit, siteOwed);
+    customer.advanceDeposit -= usedAdvance;
+    site.amountPaid += usedAdvance;
+    
+    site.history.push({
+      date: new Date().toISOString(),
+      action: "Payment",
+      siteId: site.id,
+      amount: usedAdvance,
+      paymentMethod: "Advance Deposit"
+    });
+  }
+
+  // Now apply the new payment
+  const amountForSite = Math.min(remainingAmount, siteOwed - usedAdvance);
+  const excessAmount = remainingAmount - amountForSite;
+
+  if (amountForSite > 0) {
+    site.amountPaid += amountForSite;
+    site.history.push({
+      date: new Date().toISOString(),
+      action: "Payment",
+      siteId: site.id,
+      amount: amountForSite,
+      paymentMethod: paymentMethod || "Cash"
+    });
+  }
+
+  // Store excess as customer advance deposit
+  if (excessAmount > 0) {
+    customer.advanceDeposit += excessAmount;
+  }
 
   // Check if site is fully paid and all materials returned
-  const siteRent = calculateSiteRent(site);
-  if (siteRent.isFullyPaid) {
+  const updatedSiteCalc = calculateSiteRent(site);
+  if (updatedSiteCalc.isFullyPaid) {
     // Mark settlement and reset cycle for this site
     site.lastSettlementDate = new Date().toISOString();
     site.amountPaid = 0;
