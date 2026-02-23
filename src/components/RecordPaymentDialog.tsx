@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getCustomers, recordPayment, calculateSiteRent, type Customer } from "@/lib/rental-store";
-import { generateInvoice, generateInvoiceNumber } from "@/lib/invoice-generator";
 import { toast } from "sonner";
-import { Download } from "lucide-react";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface RecordPaymentDialogProps {
   open: boolean;
@@ -22,6 +24,9 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [customPaymentMethod, setCustomPaymentMethod] = useState("");
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentTime, setPaymentTime] = useState(new Date().toTimeString().slice(0, 5));
 
   // Use pre-selected customer if provided
   const effectiveCustomerId = preSelectedCustomerId || selectedCustomerId;
@@ -52,7 +57,10 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
 
     const finalPaymentMethod = paymentMethod === "Other" ? customPaymentMethod : paymentMethod;
 
-    const success = recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod);
+    // Combine date and time into ISO string
+    const paymentDateTime = new Date(`${paymentDate}T${paymentTime}`).toISOString();
+
+    const success = recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime);
     if (success) {
       toast.success("Payment recorded successfully!");
       
@@ -61,6 +69,8 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
       setAmount("");
       setPaymentMethod("Cash");
       setCustomPaymentMethod("");
+      setPaymentDate(new Date().toISOString().split("T")[0]);
+      setPaymentTime(new Date().toTimeString().slice(0, 5));
       onSuccess();
       onOpenChange(false);
     } else {
@@ -78,25 +88,50 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
           {!preSelectedCustomerId && (
             <div className="space-y-2">
               <Label htmlFor="customer">Customer</Label>
-              <Select value={selectedCustomerId} onValueChange={(value) => {
-                setSelectedCustomerId(value);
-                setSelectedSiteId("");
-              }}>
-                <SelectTrigger id="customer">
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground">No customers with materials</div>
-                  ) : (
-                    customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={customerSearchOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedCustomerId
+                      ? customers.find((c) => c.id === selectedCustomerId)?.name
+                      : "Select customer..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search customer..." />
+                    <CommandList>
+                      <CommandEmpty>No customer found.</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setSelectedCustomerId(c.id);
+                              setSelectedSiteId("");
+                              setCustomerSearchOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedCustomerId === c.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
@@ -223,6 +258,27 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
               />
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="paymentDate">Payment Date</Label>
+              <Input
+                id="paymentDate"
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="paymentTime">Payment Time</Label>
+              <Input
+                id="paymentTime"
+                type="time"
+                value={paymentTime}
+                onChange={(e) => setPaymentTime(e.target.value)}
+              />
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

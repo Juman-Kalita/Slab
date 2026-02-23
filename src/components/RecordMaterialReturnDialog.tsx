@@ -4,9 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getCustomers, recordReturn, getMaterialType } from "@/lib/rental-store";
 import { toast } from "sonner";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface RecordMaterialReturnDialogProps {
   open: boolean;
@@ -22,6 +26,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
   const [quantityReturned, setQuantityReturned] = useState("");
   const [quantityLost, setQuantityLost] = useState("0");
   const [hasOwnLabor, setHasOwnLabor] = useState(false);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
 
   // Use pre-selected customer if provided
   const effectiveCustomerId = preSelectedCustomerId || selectedCustomerId;
@@ -84,26 +89,51 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
           {!preSelectedCustomerId && (
             <div className="space-y-2">
               <Label htmlFor="customer">Customer</Label>
-              <Select value={selectedCustomerId} onValueChange={(value) => {
-                setSelectedCustomerId(value);
-                setSelectedSiteId("");
-                setSelectedMaterialTypeId("");
-              }}>
-                <SelectTrigger id="customer">
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground">No customers with materials</div>
-                  ) : (
-                    customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={customerSearchOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedCustomerId
+                      ? customers.find((c) => c.id === selectedCustomerId)?.name
+                      : "Select customer..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search customer..." />
+                    <CommandList>
+                      <CommandEmpty>No customer found.</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setSelectedCustomerId(c.id);
+                              setSelectedSiteId("");
+                              setSelectedMaterialTypeId("");
+                              setCustomerSearchOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedCustomerId === c.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 

@@ -124,6 +124,8 @@ export interface Site {
   originalRentCharge: number; // Original rent charge for this site
   originalIssueLC: number; // Original issue LC for this site
   history: HistoryEvent[]; // History specific to this site
+  vehicleNo?: string; // Vehicle number used for shipping
+  challanNo?: string; // Challan number for the shipment
 }
 
 export interface Customer {
@@ -276,6 +278,10 @@ export function issueMaterials(
     aadharPhoto?: string;
     address?: string;
     referral?: string;
+  },
+  shippingDetails?: {
+    vehicleNo?: string;
+    challanNo?: string;
   }
 ): boolean {
   // Check if enough inventory available
@@ -301,12 +307,15 @@ export function issueMaterials(
     );
 
     if (site) {
-      // Add to existing site
+      // Add to existing site - always add materials (even if same type exists)
+      // This allows multiple dispatches of the same material to the same site
       const existingMaterial = site.materials.find(m => m.materialTypeId === materialTypeId);
       if (existingMaterial) {
+        // Add to existing material quantity
         existingMaterial.quantity += quantity;
         existingMaterial.initialQuantity += quantity;
       } else {
+        // Add new material type to site
         site.materials.push({
           materialTypeId,
           quantity,
@@ -315,6 +324,16 @@ export function issueMaterials(
           hasOwnLabor
         });
       }
+      
+      // Update shipping details if provided
+      if (shippingDetails?.vehicleNo) {
+        site.vehicleNo = shippingDetails.vehicleNo;
+      }
+      if (shippingDetails?.challanNo) {
+        site.challanNo = shippingDetails.challanNo;
+      }
+      
+      // Record in history
       site.history.push({
         date: issueDate,
         action: "Issued",
@@ -323,6 +342,8 @@ export function issueMaterials(
         quantity,
         hasOwnLabor
       });
+      
+      // Add charges
       site.originalRentCharge += rentCharge;
       site.originalIssueLC += issueLC;
 
@@ -352,8 +373,8 @@ export function issueMaterials(
         });
       }
     } else {
-      // Create new site for existing customer
-      const newSite: Site = {
+    // Create new site for existing customer
+    const newSite: Site = {
         id: crypto.randomUUID(),
         siteName,
         location,
@@ -377,7 +398,9 @@ export function issueMaterials(
             quantity,
             hasOwnLabor
           }
-        ]
+        ],
+        vehicleNo: shippingDetails?.vehicleNo,
+        challanNo: shippingDetails?.challanNo
       };
 
       // Auto-apply customer advance deposit to new site
@@ -406,6 +429,7 @@ export function issueMaterials(
         });
       }
 
+      
       existing.sites.push(newSite);
     }
   } else {
@@ -441,7 +465,9 @@ export function issueMaterials(
           amount: depositAmount,
           paymentMethod: "Cash"
         }] : [])
-      ]
+      ],
+      vehicleNo: shippingDetails?.vehicleNo,
+      challanNo: shippingDetails?.challanNo
     };
     // Set siteId in history after creating the site
     newSite.history.forEach(h => { if (h.siteId !== undefined) h.siteId = newSite.id; });
@@ -668,13 +694,16 @@ export function calculateRent(customer: Customer): {
 }
 
 // Record payment
-export function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string): boolean {
+export function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string): boolean {
   const customers = getCustomers();
   const customer = customers.find((c) => c.id === customerId);
   if (!customer) return false;
 
   const site = customer.sites.find(s => s.id === siteId);
   if (!site) return false;
+
+  // Use provided date or current date
+  const recordDate = paymentDate || new Date().toISOString();
 
   // Calculate what's owed for this site
   const siteCalc = calculateSiteRent(site);
@@ -690,7 +719,7 @@ export function recordPayment(customerId: string, siteId: string, amount: number
     site.amountPaid += usedAdvance;
     
     site.history.push({
-      date: new Date().toISOString(),
+      date: recordDate,
       action: "Payment",
       siteId: site.id,
       amount: usedAdvance,
@@ -705,7 +734,7 @@ export function recordPayment(customerId: string, siteId: string, amount: number
   if (amountForSite > 0) {
     site.amountPaid += amountForSite;
     site.history.push({
-      date: new Date().toISOString(),
+      date: recordDate,
       action: "Payment",
       siteId: site.id,
       amount: amountForSite,
@@ -722,7 +751,7 @@ export function recordPayment(customerId: string, siteId: string, amount: number
   const updatedSiteCalc = calculateSiteRent(site);
   if (updatedSiteCalc.isFullyPaid) {
     // Mark settlement and reset cycle for this site
-    site.lastSettlementDate = new Date().toISOString();
+    site.lastSettlementDate = recordDate;
     site.amountPaid = 0;
     site.originalRentCharge = 0;
     site.originalIssueLC = 0;

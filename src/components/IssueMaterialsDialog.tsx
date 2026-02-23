@@ -27,6 +27,8 @@ interface SiteLine {
   siteName: string;
   location: string;
   materials: MaterialLine[];
+  vehicleNo?: string;
+  challanNo?: string;
 }
 
 const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsDialogProps) => {
@@ -86,7 +88,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
     }
   };
 
-  const updateSiteLine = (siteId: string, field: 'siteName' | 'location', value: string) => {
+  const updateSiteLine = (siteId: string, field: 'siteName' | 'location' | 'vehicleNo' | 'challanNo', value: string) => {
     setSiteLines(siteLines.map(site =>
       site.id === siteId ? { ...site, [field]: value } : site
     ));
@@ -185,6 +187,10 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             aadharPhoto: aadharPhoto || undefined,
             address: address || undefined,
             referral: referral || undefined,
+          },
+          {
+            vehicleNo: site.vehicleNo || undefined,
+            challanNo: site.challanNo || undefined,
           }
         );
         
@@ -380,6 +386,31 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                           onChange={(e) => updateSiteLine(site.id, 'location', e.target.value)}
                           required
                         />
+                      </div>
+                    </div>
+
+                    {/* Shipping Details */}
+                    <div className="border-t pt-3 mt-2">
+                      <Label className="text-sm font-medium mb-2 block">Shipping Details (Optional)</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor={`vehicleNo-${site.id}`} className="text-xs">Vehicle Number</Label>
+                          <Input
+                            id={`vehicleNo-${site.id}`}
+                            placeholder="e.g. MH12AB1234"
+                            value={site.vehicleNo || ''}
+                            onChange={(e) => updateSiteLine(site.id, 'vehicleNo', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`challanNo-${site.id}`} className="text-xs">Challan Number</Label>
+                          <Input
+                            id={`challanNo-${site.id}`}
+                            placeholder="e.g. CH-2024-001"
+                            value={site.challanNo || ''}
+                            onChange={(e) => updateSiteLine(site.id, 'challanNo', e.target.value)}
+                          />
+                        </div>
                       </div>
                     </div>
 

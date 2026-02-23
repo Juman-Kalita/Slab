@@ -220,6 +220,15 @@ const Dashboard = () => {
               const totalItems = site.materials.reduce((sum, m) => sum + m.quantity, 0);
               const siteCalc = calculateSiteRent(site);
               
+              // Calculate total items issued and returned from history
+              const totalIssued = site.history
+                .filter(h => h.action === "Issued")
+                .reduce((sum, h) => sum + (h.quantity || 0), 0);
+              
+              const totalReturned = site.history
+                .filter(h => h.action === "Returned")
+                .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+              
               return (
                 <Card key={site.id}>
                   <CardContent className="p-6 space-y-4">
@@ -243,6 +252,46 @@ const Dashboard = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Items Summary */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Total Issued</div>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalIssued}</div>
+                        <div className="text-xs text-muted-foreground">items</div>
+                      </div>
+                      <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Total Returned</div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalReturned}</div>
+                        <div className="text-xs text-muted-foreground">items</div>
+                      </div>
+                      <div className="border rounded-lg p-3 bg-orange-50 dark:bg-orange-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Currently Held</div>
+                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{totalItems}</div>
+                        <div className="text-xs text-muted-foreground">items</div>
+                      </div>
+                    </div>
+
+                    {/* Shipping Details */}
+                    {(site.vehicleNo || site.challanNo) && (
+                      <div className="border rounded-lg p-3 bg-amber-50 dark:bg-amber-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Shipping Details:</div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          {site.vehicleNo && (
+                            <div>
+                              <span className="text-muted-foreground">Vehicle:</span>
+                              <span className="ml-2 font-medium">{site.vehicleNo}</span>
+                            </div>
+                          )}
+                          {site.challanNo && (
+                            <div>
+                              <span className="text-muted-foreground">Challan:</span>
+                              <span className="ml-2 font-medium">{site.challanNo}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Financial Summary */}
                     <div className="border rounded-lg p-4 bg-muted/20 space-y-2 text-sm">

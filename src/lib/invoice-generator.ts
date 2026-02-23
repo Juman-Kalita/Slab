@@ -72,19 +72,33 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setFont("helvetica", "normal");
   doc.text(`${data.site.siteName}, ${data.site.location}`, 15, 69);
   
+  // Shipping Details (if available)
+  let yPos = 73;
+  if (data.site.vehicleNo || data.site.challanNo) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text("Shipping:", 15, yPos);
+    doc.setFont("helvetica", "normal");
+    const shippingInfo = [];
+    if (data.site.vehicleNo) shippingInfo.push(`Vehicle: ${data.site.vehicleNo}`);
+    if (data.site.challanNo) shippingInfo.push(`Challan: ${data.site.challanNo}`);
+    doc.text(shippingInfo.join(" | "), 15, yPos + 4);
+    yPos += 8;
+  }
+  
   // Status Badge
   if (data.isWithinGracePeriod) {
     doc.setFillColor(34, 197, 94);
-    doc.roundedRect(15, 73, 45, 6, 2, 2, "F");
+    doc.roundedRect(15, yPos, 45, 6, 2, 2, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
-    doc.text("Within Grace Period", 17, 77);
+    doc.text("Within Grace Period", 17, yPos + 4);
   } else {
     doc.setFillColor(239, 68, 68);
-    doc.roundedRect(15, 73, 45, 6, 2, 2, "F");
+    doc.roundedRect(15, yPos, 45, 6, 2, 2, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
-    doc.text(`Overdue by ${data.daysOverdue} days`, 17, 77);
+    doc.text(`Overdue by ${data.daysOverdue} days`, 17, yPos + 4);
   }
   doc.setTextColor(0, 0, 0);
   
@@ -97,7 +111,7 @@ export function generateInvoice(data: InvoiceData): void {
   ]);
   
   autoTable(doc, {
-    startY: 85,
+    startY: yPos + 10,
     head: [["Material", "Issued", "Held", "Rate/Day"]],
     body: materialRows,
     theme: "grid",
@@ -173,6 +187,22 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setTextColor(0, 0, 0);
   currentY += 20;
   
+  // Payment Methods Used
+  const paymentMethods = data.site.history
+    .filter((h) => h.action === "Payment" && h.paymentMethod)
+    .map((h) => h.paymentMethod);
+  
+  if (paymentMethods.length > 0) {
+    const uniqueMethods = Array.from(new Set(paymentMethods));
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Payment Methods Used:", 15, currentY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(uniqueMethods.join(", "), 15, currentY + 5);
+    currentY += 12;
+  }
+  
   // Items Summary
   const totalIssued = data.site.history
     .filter((h) => h.action === "Issued")
@@ -213,7 +243,7 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   const terms = [
-    "• Payment must be made within the grace period (20 or 30 days depending on material type)",
+    "• Payment must be made within the grace period (30 days from issue date)",
     "• Late payment penalty: ₹10 per item per day after grace period",
     "• Returns before full payment do not reduce the amount owed for the grace period",
     "• Lost items are charged at the penalty rate specified per material type",
