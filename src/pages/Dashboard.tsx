@@ -346,6 +346,38 @@ const Dashboard = () => {
                       return null;
                     })()}
 
+                    {/* Payment History */}
+                    {(() => {
+                      const paymentEvents = site.history.filter(h => h.action === "Payment" && h.amount);
+                      if (paymentEvents.length > 0) {
+                        return (
+                          <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/20">
+                            <h5 className="font-semibold mb-3 text-sm">Payment History</h5>
+                            <div className="space-y-2">
+                              {paymentEvents.map((payment, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded border">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium">₹{payment.amount?.toLocaleString("en-IN")}</span>
+                                      {payment.paymentMethod && (
+                                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                                          {payment.paymentMethod}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {format(new Date(payment.date), "dd MMM yyyy, hh:mm a")}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {/* Materials at this site */}
                     {site.materials.filter(m => m.quantity > 0).length > 0 && (
                       <div className="border-t pt-4">
