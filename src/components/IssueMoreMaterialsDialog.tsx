@@ -9,11 +9,13 @@ import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock, get
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
-interface AddSiteDialogProps {
+interface IssueMoreMaterialsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   customerName: string;
+  siteName: string;
+  location: string;
 }
 
 interface MaterialLine {
@@ -24,34 +26,28 @@ interface MaterialLine {
   customLoadingCharge: string;
 }
 
-const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteDialogProps) => {
-  const [siteName, setSiteName] = useState("");
-  const [location, setLocation] = useState("");
+const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName, siteName, location }: IssueMoreMaterialsDialogProps) => {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [materialLines, setMaterialLines] = useState<MaterialLine[]>([
     { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [inventory, setInventory] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(false);
 
-  // Load inventory when dialog opens
   useEffect(() => {
     if (open) {
       const loadInventory = async () => {
-        setLoading(true);
         try {
           const data = await getInventory();
           setInventory(data);
         } catch (error) {
-          console.error('Error loading inventory:', error);
-        } finally {
-          setLoading(false);
+          console.error("Error loading inventory:", error);
         }
       };
       loadInventory();
     }
   }, [open]);
+
   const addMaterialLine = () => {
     setMaterialLines([...materialLines, { 
       id: crypto.randomUUID(), 
@@ -78,12 +74,11 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
     e.preventDefault();
     if (submitting) return;
     
-    if (!siteName || !location || !issueDate) {
-      toast.error("Please enter site name, location, and issue date");
+    if (!issueDate) {
+      toast.error("Please enter issue date");
       return;
     }
 
-    // Validate all lines
     const validLines = materialLines.filter(line => line.materialTypeId && line.quantity);
     if (validLines.length === 0) {
       toast.error("Please add at least one material with quantity");
@@ -92,7 +87,6 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
 
     setSubmitting(true);
     try {
-      // Check for invalid quantities and stock availability
       for (const line of validLines) {
         const qty = parseInt(line.quantity);
         if (isNaN(qty) || qty <= 0) {
@@ -104,13 +98,12 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
         const available = await getAvailableStock(line.materialTypeId);
         if (qty > available) {
           const material = getMaterialType(line.materialTypeId);
-          toast.error(`Not enough stock for ${material?.name} ${material?.size}. Available: ${available}`);
+          toast.error(`Not enough stock. Available: ${available}`);
           setSubmitting(false);
           return;
         }
       }
 
-      // Issue all materials
       let successCount = 0;
       for (const line of validLines) {
         const qty = parseInt(line.quantity);
@@ -122,32 +115,24 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
           qty, 
           issueDate, 
           line.hasOwnLabor,
-          0, // No deposit during site addition
-          undefined, // No client details
-          undefined, // No shipping details
+          0,
+          undefined,
+          undefined,
           line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined
         );
         if (success) {
           successCount++;
-        } else {
-          toast.error("Failed to issue some materials");
-          setSubmitting(false);
-          return;
         }
       }
 
-      toast.success(`Added new site "${siteName}" with ${successCount} material type(s)`);
-      
-      // Reset form
-      setSiteName("");
-      setLocation("");
+      toast.success(`Added ${successCount} material types to ${siteName}`);
       setIssueDate(new Date().toISOString().split("T")[0]);
       setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]);
       onSuccess();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error adding site:', error);
-      toast.error('Failed to add site');
+      console.error("Error issuing materials:", error);
+      toast.error("Failed to issue materials");
     } finally {
       setSubmitting(false);
     }
@@ -157,30 +142,12 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Site for {customerName}</DialogTitle>
+          <DialogTitle>Issue More Materials to {siteName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="siteName">Site Name</Label>
-              <Input
-                id="siteName"
-                placeholder="e.g. Building A, Tower 1"
-                value={siteName}
-                onChange={(e) => setSiteName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="location">Location/Region</Label>
-              <Input
-                id="location"
-                placeholder="e.g. Mumbai, Pune"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                required
-              />
-            </div>
+          <div className="bg-muted/30 rounded-lg p-3 text-sm">
+            <div className="font-semibold">{customerName}</div>
+            <div className="text-muted-foreground">{siteName} - {location}</div>
           </div>
 
           <div className="space-y-2">
@@ -241,7 +208,7 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
                                             <span>
                                               {material.name} {material.size && `(${material.size})`} - ₹{material.rentPerDay}/day
                                             </span>
-                                            <span className={`text-xs font-semibold ${stock === 0 ? 'text-red-600' : stock < 10 ? 'text-orange-600' : 'text-green-600'}`}>
+                                            <span className={`text-xs font-semibold ${stock === 0 ? "text-red-600" : stock < 10 ? "text-orange-600" : "text-green-600"}`}>
                                               [{stock}]
                                             </span>
                                           </div>
@@ -267,7 +234,7 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
                           />
                           {selectedMaterial && (
                             <p className="text-xs text-muted-foreground">
-                              Available: <span className={availableStock < 10 ? 'text-orange-600 font-semibold' : 'text-green-600 font-semibold'}>{availableStock}</span>
+                              Available: <span className={availableStock < 10 ? "text-orange-600 font-semibold" : "text-green-600 font-semibold"}>{availableStock}</span>
                             </p>
                           )}
                         </div>
@@ -343,7 +310,7 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
               Cancel
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={submitting}>
-              {submitting ? "Adding..." : "Add Site"}
+              {submitting ? "Issuing..." : "Issue Materials"}
             </Button>
           </div>
         </form>
@@ -352,4 +319,4 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
   );
 };
 
-export default AddSiteDialog;
+export default IssueMoreMaterialsDialog;

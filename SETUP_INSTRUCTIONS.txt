@@ -1,0 +1,62 @@
+═══════════════════════════════════════════════════════════════
+  FIX YOUR APP - FOLLOW THESE EXACT STEPS
+═══════════════════════════════════════════════════════════════
+
+STEP 1: Go to Supabase
+------------------------
+1. Open: https://supabase.com
+2. Login to your project
+3. Click "SQL Editor" (in left sidebar)
+4. Click "New Query" button
+
+
+STEP 2: Run the Setup SQL
+--------------------------
+1. Open the file: supabase-setup-clean.sql
+2. Copy EVERYTHING from that file (Ctrl+A, Ctrl+C)
+3. Paste into Supabase SQL Editor (Ctrl+V)
+4. Click the green "RUN" button
+5. Wait for "Success" message (should take 2-3 seconds)
+
+
+STEP 3: Initialize Inventory
+-----------------------------
+1. Go to: http://localhost:5173/setup
+2. Click "Initialize Database" button
+3. Wait for green checkmark ✓
+4. Click "Go to Dashboard"
+
+
+═══════════════════════════════════════════════════════════════
+  DONE! Your app now works!
+═══════════════════════════════════════════════════════════════
+
+What you should see now:
+✓ Inventory shows correct stock numbers (not 0)
+✓ You can issue materials
+✓ You can record returns
+✓ You can record payments
+✓ Data saves and persists
+
+
+═══════════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+Problem: Still shows 0 inventory
+Solution: 
+  - Make sure you clicked "RUN" in Supabase
+  - Go to http://localhost:5173/setup again
+  - Click "Initialize Database" again
+
+Problem: Error in Supabase SQL Editor
+Solution:
+  - Make sure you copied the ENTIRE supabase-setup-clean.sql file
+  - Try refreshing Supabase page and running again
+
+Problem: Can't access /setup page
+Solution:
+  - Make sure dev server is running (npm run dev)
+  - Try: http://localhost:5173/setup (with /setup at end)
+
+═══════════════════════════════════════════════════════════════

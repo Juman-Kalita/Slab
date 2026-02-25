@@ -1,4 +1,5 @@
 import { differenceInDays } from "date-fns";
+import * as SupabaseStore from './supabase-store';
 
 // Material Types Configuration
 export interface MaterialType {
@@ -141,50 +142,24 @@ export interface Customer {
   advanceDeposit: number; // Customer-level advance deposit (excess payments)
 }
 
-const STORAGE_KEY = "rental_customers";
 const SESSION_KEY = "rental_session";
-const INVENTORY_KEY = "rental_inventory";
 
-// Credentials
+// Credentials (kept for backward compatibility, will be replaced with Supabase Auth)
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "admin123";
 
 // Inventory Management
-export function getInventory(): Record<string, number> {
-  const stored = localStorage.getItem(INVENTORY_KEY);
-  if (!stored) {
-    // Initialize with default inventory from MATERIAL_TYPES
-    const defaultInventory: Record<string, number> = {};
-    MATERIAL_TYPES.forEach(mt => {
-      defaultInventory[mt.id] = mt.inventory;
-    });
-    localStorage.setItem(INVENTORY_KEY, JSON.stringify(defaultInventory));
-    return defaultInventory;
-  }
-  return JSON.parse(stored);
+export async function getInventory(): Promise<Record<string, number>> {
+  return await SupabaseStore.getInventory();
 }
 
-function saveInventory(inventory: Record<string, number>): void {
-  localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
-}
-
-export function getAvailableStock(materialTypeId: string): number {
-  const inventory = getInventory();
+export async function getAvailableStock(materialTypeId: string): Promise<number> {
+  const inventory = await getInventory();
   return inventory[materialTypeId] || 0;
 }
 
-export function updateInventory(materialTypeId: string, change: number): boolean {
-  const inventory = getInventory();
-  const current = inventory[materialTypeId] || 0;
-  const newAmount = current + change;
-  
-  if (newAmount < 0) {
-    return false; // Cannot go negative
-  }
-  
-  inventory[materialTypeId] = newAmount;
-  saveInventory(inventory);
-  return true;
+export async function updateInventory(materialTypeId: string, change: number): Promise<boolean> {
+  return await SupabaseStore.adjustInventory(materialTypeId, change);
 }
 
 // Auth
@@ -205,56 +180,8 @@ export function isLoggedIn(): boolean {
 }
 
 // Data access
-export function getCustomers(): Customer[] {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const customers: any[] = raw ? JSON.parse(raw) : [];
-  
-  // Migrate old data format to new multi-site format
-  return customers.map(c => {
-    // Check if customer has old structure (materials directly on customer)
-    if (c.materials && !c.sites) {
-      // Migrate to new structure with a default site
-      return {
-        ...c,
-        sites: [{
-          id: crypto.randomUUID(),
-          siteName: "Main Site",
-          location: c.address || "Unknown",
-          issueDate: c.issueDate,
-          materials: c.materials.map((m: any) => ({
-            ...m,
-            initialQuantity: m.initialQuantity ?? m.quantity
-          })),
-          amountPaid: c.amountPaid ?? 0,
-          lastSettlementDate: c.lastSettlementDate ?? null,
-          originalRentCharge: c.originalRentCharge ?? 0,
-          originalIssueLC: c.originalIssueLC ?? 0,
-          history: c.history ?? []
-        }],
-        createdDate: c.issueDate || new Date().toISOString(),
-        // Remove old fields
-        materials: undefined,
-        issueDate: undefined,
-        amountPaid: undefined,
-        lastSettlementDate: undefined,
-        originalRentCharge: undefined,
-        originalIssueLC: undefined,
-        history: undefined
-      };
-    }
-    
-    // Already in new format
-    return {
-      ...c,
-      sites: c.sites || [],
-      createdDate: c.createdDate || new Date().toISOString(),
-      advanceDeposit: c.advanceDeposit || 0 // Initialize advance deposit
-    };
-  });
-}
-
-function saveCustomers(customers: Customer[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(customers));
+export async function getCustomers(): Promise<Customer[]> {
+  return await SupabaseStore.getCustomers();
 }
 
 // Get material type by ID
@@ -263,7 +190,7 @@ export function getMaterialType(id: string): MaterialType | undefined {
 }
 
 // Issue materials
-export function issueMaterials(
+export async function issueMaterials(
   name: string,
   siteName: string,
   location: string,
@@ -282,256 +209,276 @@ export function issueMaterials(
   shippingDetails?: {
     vehicleNo?: string;
     challanNo?: string;
-  }
-): boolean {
-  // Check if enough inventory available
-  const available = getAvailableStock(materialTypeId);
-  if (available < quantity) {
-    return false; // Not enough stock
-  }
+  },
+  customLoadingCharge?: number
+): Promise<boolean> {
+  try {
+    // Check if enough inventory available
+    const available = await getAvailableStock(materialTypeId);
+    if (available < quantity) {
+      return false; // Not enough stock
+    }
 
-  const customers = getCustomers();
-  const existing = customers.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    const customers = await getCustomers();
+    const existing = customers.find((c) => c.name.toLowerCase() === name.toLowerCase());
 
-  const materialType = getMaterialType(materialTypeId);
-  if (!materialType) return false;
+    const materialType = getMaterialType(materialTypeId);
+    if (!materialType) return false;
 
-  const rentCharge = quantity * materialType.rentPerDay * materialType.gracePeriodDays;
-  const issueLC = hasOwnLabor ? 0 : quantity * materialType.loadingCharge;
+    if (existing) {
+      // Find existing site for this customer
+      const site = existing.sites.find(s =>
+        s.siteName.toLowerCase() === siteName.toLowerCase() &&
+        s.location.toLowerCase() === location.toLowerCase()
+      );
 
-  if (existing) {
-    // Find or create site for this customer
-    let site = existing.sites.find(s =>
-      s.siteName.toLowerCase() === siteName.toLowerCase() &&
-      s.location.toLowerCase() === location.toLowerCase()
-    );
-
-    if (site) {
-      // Add to existing site - always add materials (even if same type exists)
-      // This allows multiple dispatches of the same material to the same site
-      const existingMaterial = site.materials.find(m => m.materialTypeId === materialTypeId);
-      if (existingMaterial) {
-        // Add to existing material quantity
-        existingMaterial.quantity += quantity;
-        existingMaterial.initialQuantity += quantity;
-      } else {
-        // Add new material type to site
-        site.materials.push({
+      if (site) {
+        // Calculate rent based on ORIGINAL site issue date, not new materials
+        const daysSinceOriginalIssue = differenceInDays(new Date(issueDate), new Date(site.issueDate));
+        const daysToCharge = Math.max(materialType.gracePeriodDays, daysSinceOriginalIssue);
+        const rentCharge = quantity * materialType.rentPerDay * daysToCharge;
+        const issueLC = hasOwnLabor ? 0 : (customLoadingCharge !== undefined ? customLoadingCharge : quantity * materialType.loadingCharge);
+        // Add to existing site
+        const existingMaterial = site.materials.find(m => m.materialTypeId === materialTypeId);
+        
+        if (existingMaterial) {
+          // Update existing material quantity
+          await SupabaseStore.updateMaterialQuantity(
+            site.id,
+            materialTypeId,
+            existingMaterial.quantity + quantity
+          );
+        } else {
+          // Add new material type to site
+          await SupabaseStore.addMaterialToSite(site.id, {
+            materialTypeId,
+            quantity,
+            initialQuantity: quantity,
+            issueDate,
+            hasOwnLabor
+          });
+        }
+        
+        // Update site charges
+        await SupabaseStore.updateSiteCharges(site.id, rentCharge, issueLC);
+        
+        // Add history event
+        await SupabaseStore.addHistoryEvent(site.id, {
+          date: issueDate,
+          action: "Issued",
           materialTypeId,
           quantity,
-          initialQuantity: quantity,
-          issueDate,
           hasOwnLabor
         });
-      }
-      
-      // Update shipping details if provided
-      if (shippingDetails?.vehicleNo) {
-        site.vehicleNo = shippingDetails.vehicleNo;
-      }
-      if (shippingDetails?.challanNo) {
-        site.challanNo = shippingDetails.challanNo;
-      }
-      
-      // Record in history
-      site.history.push({
-        date: issueDate,
-        action: "Issued",
-        siteId: site.id,
-        materialTypeId,
-        quantity,
-        hasOwnLabor
-      });
-      
-      // Add charges
-      site.originalRentCharge += rentCharge;
-      site.originalIssueLC += issueLC;
 
-      // Auto-apply customer advance deposit to this site
-      if (existing.advanceDeposit > 0) {
-        const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
-        existing.advanceDeposit -= amountToApply;
-        site.amountPaid += amountToApply;
-        site.history.push({
+        // Auto-apply customer advance deposit to this site
+        if (existing.advanceDeposit > 0) {
+          const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
+          await SupabaseStore.updateCustomerAdvanceDeposit(
+            existing.id,
+            existing.advanceDeposit - amountToApply
+          );
+          
+          const currentSite = (await getCustomers())
+            .find(c => c.id === existing.id)?.sites
+            .find(s => s.id === site.id);
+          
+          if (currentSite) {
+            await SupabaseStore.updateSitePayment(site.id, currentSite.amountPaid + amountToApply);
+            await SupabaseStore.addHistoryEvent(site.id, {
+              date: issueDate,
+              action: "Payment",
+              amount: amountToApply,
+              paymentMethod: "Advance Deposit"
+            });
+          }
+        }
+
+        // Add deposit as payment if provided
+        if (depositAmount > 0) {
+          const currentSite = (await getCustomers())
+            .find(c => c.id === existing.id)?.sites
+            .find(s => s.id === site.id);
+          
+          if (currentSite) {
+            await SupabaseStore.updateSitePayment(site.id, currentSite.amountPaid + depositAmount);
+            await SupabaseStore.addHistoryEvent(site.id, {
+              date: issueDate,
+              action: "Payment",
+              amount: depositAmount,
+              paymentMethod: "Cash"
+            });
+          }
+        }
+      } else {
+        // Create new site for existing customer - use full grace period
+        const rentCharge = quantity * materialType.rentPerDay * materialType.gracePeriodDays;
+        const issueLC = hasOwnLabor ? 0 : (customLoadingCharge !== undefined ? customLoadingCharge : quantity * materialType.loadingCharge);
+        
+        const historyEvents: Array<any> = [
+          {
+            date: issueDate,
+            action: "Issued" as const,
+            materialTypeId,
+            quantity,
+            hasOwnLabor
+          }
+        ];
+
+        let initialAmountPaid = 0;
+
+        // Auto-apply customer advance deposit to new site
+        if (existing.advanceDeposit > 0) {
+          const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
+          initialAmountPaid += amountToApply;
+          
+          await SupabaseStore.updateCustomerAdvanceDeposit(
+            existing.id,
+            existing.advanceDeposit - amountToApply
+          );
+          
+          historyEvents.push({
+            date: issueDate,
+            action: "Payment" as const,
+            amount: amountToApply,
+            paymentMethod: "Advance Deposit"
+          });
+        }
+
+        // Add deposit if provided
+        if (depositAmount > 0) {
+          initialAmountPaid += depositAmount;
+          historyEvents.push({
+            date: issueDate,
+            action: "Payment" as const,
+            amount: depositAmount,
+            paymentMethod: "Cash"
+          });
+        }
+
+        await SupabaseStore.addSiteToCustomer(
+          existing.id,
+          {
+            siteName,
+            location,
+            issueDate,
+            originalRentCharge: rentCharge,
+            originalIssueLC: issueLC,
+            amountPaid: initialAmountPaid
+          },
+          [{
+            materialTypeId,
+            quantity,
+            initialQuantity: quantity,
+            issueDate,
+            hasOwnLabor
+          }],
+          historyEvents
+        );
+      }
+    } else {
+      // Create new customer with first site - use full grace period
+      const rentCharge = quantity * materialType.rentPerDay * materialType.gracePeriodDays;
+      const issueLC = hasOwnLabor ? 0 : (customLoadingCharge !== undefined ? customLoadingCharge : quantity * materialType.loadingCharge);
+      
+      const historyEvents: Array<any> = [
+        {
           date: issueDate,
-          action: "Payment",
-          siteId: site.id,
-          amount: amountToApply,
-          paymentMethod: "Advance Deposit"
-        });
-      }
+          action: "Issued" as const,
+          materialTypeId,
+          quantity,
+          hasOwnLabor
+        }
+      ];
 
-      // Add deposit as payment if provided
       if (depositAmount > 0) {
-        site.amountPaid += depositAmount;
-        site.history.push({
+        historyEvents.push({
           date: issueDate,
-          action: "Payment",
-          siteId: site.id,
+          action: "Payment" as const,
           amount: depositAmount,
           paymentMethod: "Cash"
         });
       }
-    } else {
-    // Create new site for existing customer
-    const newSite: Site = {
-        id: crypto.randomUUID(),
-        siteName,
-        location,
-        issueDate,
-        materials: [{
+
+      await SupabaseStore.createCustomerWithSite(
+        {
+          name,
+          registrationName: clientDetails?.registrationName,
+          contactNo: clientDetails?.contactNo,
+          aadharPhoto: clientDetails?.aadharPhoto,
+          address: clientDetails?.address,
+          referral: clientDetails?.referral
+        },
+        {
+          siteName,
+          location,
+          issueDate,
+          originalRentCharge: rentCharge,
+          originalIssueLC: issueLC
+        },
+        [{
           materialTypeId,
           quantity,
           initialQuantity: quantity,
           issueDate,
           hasOwnLabor
         }],
-        amountPaid: 0,
-        lastSettlementDate: null,
-        originalRentCharge: rentCharge,
-        originalIssueLC: issueLC,
-        history: [
-          {
-            date: issueDate,
-            action: "Issued",
-            materialTypeId,
-            quantity,
-            hasOwnLabor
-          }
-        ],
-        vehicleNo: shippingDetails?.vehicleNo,
-        challanNo: shippingDetails?.challanNo
-      };
-
-      // Auto-apply customer advance deposit to new site
-      if (existing.advanceDeposit > 0) {
-        const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
-        existing.advanceDeposit -= amountToApply;
-        newSite.amountPaid += amountToApply;
-        newSite.history.push({
-          date: issueDate,
-          action: "Payment",
-          siteId: newSite.id,
-          amount: amountToApply,
-          paymentMethod: "Advance Deposit"
-        });
-      }
-
-      // Add deposit if provided
-      if (depositAmount > 0) {
-        newSite.amountPaid += depositAmount;
-        newSite.history.push({
-          date: issueDate,
-          action: "Payment",
-          siteId: newSite.id,
-          amount: depositAmount,
-          paymentMethod: "Cash"
-        });
-      }
-
-      
-      existing.sites.push(newSite);
+        historyEvents
+      );
     }
-  } else {
-    // Create new customer with first site
-    const newSite: Site = {
-      id: crypto.randomUUID(),
-      siteName,
-      location,
-      issueDate,
-      materials: [{
-        materialTypeId,
-        quantity,
-        initialQuantity: quantity,
-        issueDate,
-        hasOwnLabor
-      }],
-      amountPaid: depositAmount, // Set initial deposit
-      lastSettlementDate: null,
-      originalRentCharge: rentCharge,
-      originalIssueLC: issueLC,
-      history: [
-        {
-          date: issueDate,
-          action: "Issued",
-          materialTypeId,
-          quantity,
-          hasOwnLabor
-        },
-        ...(depositAmount > 0 ? [{
-          date: issueDate,
-          action: "Payment" as const,
-          siteId: "",
-          amount: depositAmount,
-          paymentMethod: "Cash"
-        }] : [])
-      ],
-      vehicleNo: shippingDetails?.vehicleNo,
-      challanNo: shippingDetails?.challanNo
-    };
-    // Set siteId in history after creating the site
-    newSite.history.forEach(h => { if (h.siteId !== undefined) h.siteId = newSite.id; });
 
-    customers.push({
-      id: crypto.randomUUID(),
-      name,
-      registrationName: clientDetails?.registrationName,
-      contactNo: clientDetails?.contactNo,
-      aadharPhoto: clientDetails?.aadharPhoto,
-      address: clientDetails?.address,
-      referral: clientDetails?.referral,
-      sites: [newSite],
-      createdDate: new Date().toISOString(),
-      advanceDeposit: 0 // Initialize with no advance deposit
-    });
+    // Update inventory (subtract issued quantity)
+    await updateInventory(materialTypeId, -quantity);
+
+    return true;
+  } catch (error) {
+    console.error('Error issuing materials:', error);
+    return false;
   }
-
-  // Update inventory (subtract issued quantity)
-  updateInventory(materialTypeId, -quantity);
-
-  saveCustomers(customers);
-  return true;
 }
 
 // Record return
-export function recordReturn(
+export async function recordReturn(
   customerId: string,
   siteId: string,
   materialTypeId: string,
   quantityReturned: number,
   quantityLost: number,
   hasOwnLabor: boolean
-): boolean {
-  const customers = getCustomers();
-  const customer = customers.find((c) => c.id === customerId);
-  if (!customer) return false;
+): Promise<boolean> {
+  try {
+    const customers = await getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return false;
 
-  const site = customer.sites.find(s => s.id === siteId);
-  if (!site) return false;
+    const site = customer.sites.find(s => s.id === siteId);
+    if (!site) return false;
 
-  const material = site.materials.find(m => m.materialTypeId === materialTypeId);
-  if (!material || quantityReturned + quantityLost > material.quantity) return false;
+    const material = site.materials.find(m => m.materialTypeId === materialTypeId);
+    if (!material || quantityReturned + quantityLost > material.quantity) return false;
 
-  // Update quantity (but keep initialQuantity unchanged)
-  material.quantity -= (quantityReturned + quantityLost);
-  
-  // Don't remove material even if quantity is 0 - we need initialQuantity for penalty calculation
+    // Update quantity (but keep initialQuantity unchanged)
+    const newQuantity = material.quantity - (quantityReturned + quantityLost);
+    await SupabaseStore.updateMaterialQuantity(siteId, materialTypeId, newQuantity);
+    
+    // Add history event
+    await SupabaseStore.addHistoryEvent(siteId, {
+      date: new Date().toISOString(),
+      action: "Returned",
+      materialTypeId,
+      quantity: quantityReturned,
+      quantityLost,
+      hasOwnLabor
+    });
 
-  site.history.push({
-    date: new Date().toISOString(),
-    action: "Returned",
-    siteId: site.id,
-    materialTypeId,
-    quantity: quantityReturned,
-    quantityLost,
-    hasOwnLabor
-  });
+    // Update inventory (add back returned quantity, but not lost items)
+    await updateInventory(materialTypeId, quantityReturned);
 
-  // Update inventory (add back returned quantity, but not lost items)
-  updateInventory(materialTypeId, quantityReturned);
-
-  saveCustomers(customers);
-  return true;
+    return true;
+  } catch (error) {
+    console.error('Error recording return:', error);
+    return false;
+  }
 }
 
 // Calculations
@@ -694,80 +641,101 @@ export function calculateRent(customer: Customer): {
 }
 
 // Record payment
-export function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string): boolean {
-  const customers = getCustomers();
-  const customer = customers.find((c) => c.id === customerId);
-  if (!customer) return false;
+export async function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string): Promise<boolean> {
+  try {
+    const customers = await getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return false;
 
-  const site = customer.sites.find(s => s.id === siteId);
-  if (!site) return false;
+    const site = customer.sites.find(s => s.id === siteId);
+    if (!site) return false;
 
-  // Use provided date or current date
-  const recordDate = paymentDate || new Date().toISOString();
+    // Use provided date or current date
+    const recordDate = paymentDate || new Date().toISOString();
 
-  // Calculate what's owed for this site
-  const siteCalc = calculateSiteRent(site);
-  const siteOwed = siteCalc.remainingDue;
+    // Calculate what's owed for this site
+    const siteCalc = calculateSiteRent(site);
+    const siteOwed = siteCalc.remainingDue;
 
-  // First, try to use customer's advance deposit
-  let remainingAmount = amount;
-  let usedAdvance = 0;
-  
-  if (customer.advanceDeposit > 0 && siteOwed > 0) {
-    usedAdvance = Math.min(customer.advanceDeposit, siteOwed);
-    customer.advanceDeposit -= usedAdvance;
-    site.amountPaid += usedAdvance;
+    // First, try to use customer's advance deposit
+    let remainingAmount = amount;
+    let usedAdvance = 0;
     
-    site.history.push({
-      date: recordDate,
-      action: "Payment",
-      siteId: site.id,
-      amount: usedAdvance,
-      paymentMethod: "Advance Deposit"
-    });
+    if (customer.advanceDeposit > 0 && siteOwed > 0) {
+      usedAdvance = Math.min(customer.advanceDeposit, siteOwed);
+      await SupabaseStore.updateCustomerAdvanceDeposit(
+        customer.id,
+        customer.advanceDeposit - usedAdvance
+      );
+      await SupabaseStore.updateSitePayment(siteId, site.amountPaid + usedAdvance);
+      
+      await SupabaseStore.addHistoryEvent(siteId, {
+        date: recordDate,
+        action: "Payment",
+        amount: usedAdvance,
+        paymentMethod: "Advance Deposit"
+      });
+    }
+
+    // Now apply the new payment
+    const amountForSite = Math.min(remainingAmount, siteOwed - usedAdvance);
+    const excessAmount = remainingAmount - amountForSite;
+
+    if (amountForSite > 0) {
+      // Refresh site data to get updated amountPaid
+      const updatedCustomers = await getCustomers();
+      const updatedCustomer = updatedCustomers.find(c => c.id === customerId);
+      const updatedSite = updatedCustomer?.sites.find(s => s.id === siteId);
+      
+      if (updatedSite) {
+        await SupabaseStore.updateSitePayment(siteId, updatedSite.amountPaid + amountForSite);
+        await SupabaseStore.addHistoryEvent(siteId, {
+          date: recordDate,
+          action: "Payment",
+          amount: amountForSite,
+          paymentMethod: paymentMethod || "Cash"
+        });
+      }
+    }
+
+    // Store excess as customer advance deposit
+    if (excessAmount > 0) {
+      // Refresh customer data to get updated advanceDeposit
+      const updatedCustomers = await getCustomers();
+      const updatedCustomer = updatedCustomers.find(c => c.id === customerId);
+      
+      if (updatedCustomer) {
+        await SupabaseStore.updateCustomerAdvanceDeposit(
+          customer.id,
+          updatedCustomer.advanceDeposit + excessAmount
+        );
+      }
+    }
+
+    // Check if site is fully paid and all materials returned
+    const finalCustomers = await getCustomers();
+    const finalCustomer = finalCustomers.find(c => c.id === customerId);
+    const finalSite = finalCustomer?.sites.find(s => s.id === siteId);
+    
+    if (finalSite) {
+      const updatedSiteCalc = calculateSiteRent(finalSite);
+      if (updatedSiteCalc.isFullyPaid) {
+        // Mark settlement and reset cycle for this site
+        await SupabaseStore.updateSiteSettlement(siteId, recordDate);
+        await SupabaseStore.resetMaterialInitialQuantities(siteId);
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    return false;
   }
-
-  // Now apply the new payment
-  const amountForSite = Math.min(remainingAmount, siteOwed - usedAdvance);
-  const excessAmount = remainingAmount - amountForSite;
-
-  if (amountForSite > 0) {
-    site.amountPaid += amountForSite;
-    site.history.push({
-      date: recordDate,
-      action: "Payment",
-      siteId: site.id,
-      amount: amountForSite,
-      paymentMethod: paymentMethod || "Cash"
-    });
-  }
-
-  // Store excess as customer advance deposit
-  if (excessAmount > 0) {
-    customer.advanceDeposit += excessAmount;
-  }
-
-  // Check if site is fully paid and all materials returned
-  const updatedSiteCalc = calculateSiteRent(site);
-  if (updatedSiteCalc.isFullyPaid) {
-    // Mark settlement and reset cycle for this site
-    site.lastSettlementDate = recordDate;
-    site.amountPaid = 0;
-    site.originalRentCharge = 0;
-    site.originalIssueLC = 0;
-    // Reset initialQuantity for any remaining materials
-    site.materials.forEach(m => {
-      m.initialQuantity = m.quantity;
-    });
-  }
-
-  saveCustomers(customers);
-  return true;
 }
 
 // Dashboard stats
-export function getDashboardStats() {
-  const customers = getCustomers();
+export async function getDashboardStats() {
+  const customers = await getCustomers();
   // Count customers with at least one site that has materials
   const active = customers.filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
   

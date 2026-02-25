@@ -1,8 +1,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MATERIAL_TYPES, getAvailableStock } from "@/lib/rental-store";
-import { useState } from "react";
+import { MATERIAL_TYPES, getInventory } from "@/lib/rental-store";
+import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 
 interface InventoryDialogProps {
@@ -12,6 +12,26 @@ interface InventoryDialogProps {
 
 const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
   const [search, setSearch] = useState("");
+  const [inventory, setInventory] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
+
+  // Load inventory when dialog opens
+  useEffect(() => {
+    if (open) {
+      const loadInventory = async () => {
+        setLoading(true);
+        try {
+          const data = await getInventory();
+          setInventory(data);
+        } catch (error) {
+          console.error('Error loading inventory:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadInventory();
+    }
+  }, [open]);
 
   // Group materials by category
   const categories = Array.from(new Set(MATERIAL_TYPES.map(m => m.category)));
@@ -26,8 +46,8 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
   });
 
   // Calculate totals
-  const totalStock = MATERIAL_TYPES.reduce((sum, m) => sum + getAvailableStock(m.id), 0);
-  const totalIssued = MATERIAL_TYPES.reduce((sum, m) => sum + (m.inventory - getAvailableStock(m.id)), 0);
+  const totalStock = MATERIAL_TYPES.reduce((sum, m) => sum + (inventory[m.id] || 0), 0);
+  const totalIssued = MATERIAL_TYPES.reduce((sum, m) => sum + (m.inventory - (inventory[m.id] || 0)), 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -36,8 +56,17 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
           <DialogTitle>Inventory Management</DialogTitle>
         </DialogHeader>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+              <p className="text-muted-foreground">Loading inventory...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Summary Stats */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="bg-primary/10 rounded-lg p-3 text-center">
             <div className="text-2xl font-bold text-primary">{MATERIAL_TYPES.length}</div>
             <div className="text-xs text-muted-foreground">Total Items</div>
@@ -83,7 +112,7 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
                 if (categoryMaterials.length === 0) return null;
 
                 return categoryMaterials.map((material, index) => {
-                  const available = getAvailableStock(material.id);
+                  const available = inventory[material.id] || 0;
                   const issued = material.inventory - available;
                   const percentage = material.inventory > 0 ? (available / material.inventory) * 100 : 0;
 
@@ -133,6 +162,8 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
             </TableBody>
           </Table>
         </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

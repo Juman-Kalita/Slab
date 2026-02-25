@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock, getCustomers } from "@/lib/rental-store";
+import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock, getCustomers, getInventory } from "@/lib/rental-store";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -20,6 +20,7 @@ interface MaterialLine {
   materialTypeId: string;
   quantity: string;
   hasOwnLabor: boolean;
+  customLoadingCharge: string;
 }
 
 interface SiteLine {
@@ -39,9 +40,13 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]
     }
   ]);
+  const [submitting, setSubmitting] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [inventory, setInventory] = useState<Record<string, number>>({});
   
   // Client details (for new customers)
   const [registrationName, setRegistrationName] = useState("");
@@ -49,9 +54,30 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
   const [aadharPhoto, setAadharPhoto] = useState<string>("");
   const [address, setAddress] = useState("");
   const [referral, setReferral] = useState("");
+
+  // Load customers and inventory when dialog opens
+  useEffect(() => {
+    if (open) {
+      const loadData = async () => {
+        setLoading(true);
+        try {
+          const [customersData, inventoryData] = await Promise.all([
+            getCustomers(),
+            getInventory()
+          ]);
+          setCustomers(customersData);
+          setInventory(inventoryData);
+        } catch (error) {
+          console.error('Error loading data:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadData();
+    }
+  }, [open]);
   
   // Check if customer exists and has advance deposit
-  const customers = getCustomers();
   const existingCustomer = customers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
   const hasAdvanceDeposit = existingCustomer && existingCustomer.advanceDeposit > 0;
   
@@ -78,7 +104,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]
     }]);
   };
 
@@ -97,7 +123,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
   const addMaterialLine = (siteId: string) => {
     setSiteLines(siteLines.map(site =>
       site.id === siteId
-        ? { ...site, materials: [...site.materials, { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }] }
+        ? { ...site, materials: [...site.materials, { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }] }
         : site
     ));
   };
@@ -123,8 +149,10 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
     ));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    
     if (!customerName || !issueDate) {
       toast.error("Please enter customer name and issue date");
       return;
@@ -146,83 +174,95 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       return;
     }
 
-    // Process each site
-    let totalSitesProcessed = 0;
-    let totalMaterialsIssued = 0;
+    setSubmitting(true);
+    try {
+      // Process each site
+      let totalSitesProcessed = 0;
+      let totalMaterialsIssued = 0;
 
-    for (const site of validSites) {
-      const validMaterials = site.materials.filter(m => m.materialTypeId && m.quantity);
-      
-      // Check quantities and stock for this site
-      for (const material of validMaterials) {
-        const qty = parseInt(material.quantity);
-        if (isNaN(qty) || qty <= 0) {
-          toast.error(`Invalid quantity for materials at ${site.siteName}`);
-          return;
-        }
+      for (const site of validSites) {
+        const validMaterials = site.materials.filter(m => m.materialTypeId && m.quantity);
         
-        const available = getAvailableStock(material.materialTypeId);
-        if (qty > available) {
-          const mt = getMaterialType(material.materialTypeId);
-          toast.error(`Not enough stock for ${mt?.name} ${mt?.size} at ${site.siteName}. Available: ${available}`);
-          return;
-        }
-      }
-
-      // Issue all materials for this site
-      for (const material of validMaterials) {
-        const qty = parseInt(material.quantity);
-        const success = issueMaterials(
-          customerName,
-          site.siteName,
-          site.location,
-          material.materialTypeId,
-          qty,
-          issueDate,
-          material.hasOwnLabor,
-          0, // No deposit during issuance
-          {
-            registrationName: registrationName || undefined,
-            contactNo: contactNo || undefined,
-            aadharPhoto: aadharPhoto || undefined,
-            address: address || undefined,
-            referral: referral || undefined,
-          },
-          {
-            vehicleNo: site.vehicleNo || undefined,
-            challanNo: site.challanNo || undefined,
+        // Check quantities and stock for this site
+        for (const material of validMaterials) {
+          const qty = parseInt(material.quantity);
+          if (isNaN(qty) || qty <= 0) {
+            toast.error(`Invalid quantity for materials at ${site.siteName}`);
+            setSubmitting(false);
+            return;
           }
-        );
-        
-        if (success) {
-          totalMaterialsIssued++;
-        } else {
-          toast.error(`Failed to issue materials to ${site.siteName}`);
-          return;
+          
+          const available = await getAvailableStock(material.materialTypeId);
+          if (qty > available) {
+            const mt = getMaterialType(material.materialTypeId);
+            toast.error(`Not enough stock for ${mt?.name} ${mt?.size} at ${site.siteName}. Available: ${available}`);
+            setSubmitting(false);
+            return;
+          }
         }
-      }
-      
-      totalSitesProcessed++;
-    }
 
-    toast.success(`Issued materials to ${totalSitesProcessed} site(s) for ${customerName}`);
-    
-    // Reset form
-    setCustomerName("");
-    setRegistrationName("");
-    setContactNo("");
-    setAadharPhoto("");
-    setAddress("");
-    setReferral("");
-    setIssueDate(new Date().toISOString().split("T")[0]);
-    setSiteLines([{
-      id: crypto.randomUUID(),
-      siteName: "",
-      location: "",
-      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false }]
-    }]);
-    onSuccess();
-    onOpenChange(false);
+        // Issue all materials for this site
+        for (const material of validMaterials) {
+          const qty = parseInt(material.quantity);
+          const success = await issueMaterials(
+            customerName,
+            site.siteName,
+            site.location,
+            material.materialTypeId,
+            qty,
+            issueDate,
+            material.hasOwnLabor,
+            0, // No deposit during issuance
+            {
+              registrationName: registrationName || undefined,
+              contactNo: contactNo || undefined,
+              aadharPhoto: aadharPhoto || undefined,
+              address: address || undefined,
+              referral: referral || undefined,
+            },
+            {
+              vehicleNo: site.vehicleNo || undefined,
+              challanNo: site.challanNo || undefined,
+            },
+            material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined
+          );
+          
+          if (success) {
+            totalMaterialsIssued++;
+          } else {
+            toast.error(`Failed to issue materials to ${site.siteName}`);
+            setSubmitting(false);
+            return;
+          }
+        }
+        
+        totalSitesProcessed++;
+      }
+
+      toast.success(`Issued materials to ${totalSitesProcessed} site(s) for ${customerName}`);
+      
+      // Reset form
+      setCustomerName("");
+      setRegistrationName("");
+      setContactNo("");
+      setAadharPhoto("");
+      setAddress("");
+      setReferral("");
+      setIssueDate(new Date().toISOString().split("T")[0]);
+      setSiteLines([{
+        id: crypto.randomUUID(),
+        siteName: "",
+        location: "",
+        materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]
+      }]);
+      onSuccess();
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error issuing materials:', error);
+      toast.error('Failed to issue materials');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -431,7 +471,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
 
                       {site.materials.map((material) => {
                         const selectedMaterial = getMaterialType(material.materialTypeId);
-                        const availableStock = material.materialTypeId ? getAvailableStock(material.materialTypeId) : 0;
+                        const availableStock = material.materialTypeId ? (inventory[material.materialTypeId] || 0) : 0;
                         const categories = Array.from(new Set(MATERIAL_TYPES.map(m => m.category)));
 
                         return (
@@ -457,7 +497,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                                                 {category}
                                               </SelectLabel>
                                               {MATERIAL_TYPES.filter(m => m.category === category).map((mt) => {
-                                                const stock = getAvailableStock(mt.id);
+                                                const stock = inventory[mt.id] || 0;
                                                 return (
                                                   <SelectItem
                                                     key={mt.id}
@@ -529,6 +569,26 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                                     Own labor (No LC&ULC)
                                   </Label>
                                 </div>
+
+                                {!material.hasOwnLabor && (
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`customLoadingCharge-${material.id}`} className="text-xs">
+                                      Custom Loading Charge (Optional)
+                                    </Label>
+                                    <Input
+                                      id={`customLoadingCharge-${material.id}`}
+                                      type="number"
+                                      placeholder={selectedMaterial ? `Default: ₹${selectedMaterial.loadingCharge * parseInt(material.quantity || "0")}` : "Enter amount"}
+                                      value={material.customLoadingCharge}
+                                      onChange={(e) => updateMaterialLine(site.id, material.id, "customLoadingCharge", e.target.value)}
+                                      min="0"
+                                      className="h-9"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      Leave empty to use default LC&ULC
+                                    </p>
+                                  </div>
+                                )}
                               </div>
 
                               {site.materials.length > 1 && (
@@ -554,11 +614,11 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              Issue Materials
+            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={submitting}>
+              {submitting ? "Issuing..." : "Issue Materials"}
             </Button>
           </div>
         </form>

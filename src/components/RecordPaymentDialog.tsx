@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,17 +27,40 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentTime, setPaymentTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [submitting, setSubmitting] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Use pre-selected customer if provided
   const effectiveCustomerId = preSelectedCustomerId || selectedCustomerId;
 
-  const customers = getCustomers().filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
+  // Load customers when dialog opens
+  useEffect(() => {
+    if (open) {
+      const loadCustomers = async () => {
+        setLoading(true);
+        try {
+          const data = await getCustomers();
+          const filtered = data.filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
+          setCustomers(filtered);
+        } catch (error) {
+          console.error('Error loading customers:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadCustomers();
+    }
+  }, [open]);
+
   const selectedCustomer = customers.find((c) => c.id === effectiveCustomerId);
   const selectedSite = selectedCustomer?.sites.find(s => s.id === selectedSiteId);
   const calculatedRent = selectedSite ? calculateSiteRent(selectedSite) : null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    
     if (!effectiveCustomerId || !selectedSiteId || !amount) {
       toast.error("Please select a customer, site, and enter amount");
       return;
@@ -60,21 +83,29 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
     // Combine date and time into ISO string
     const paymentDateTime = new Date(`${paymentDate}T${paymentTime}`).toISOString();
 
-    const success = recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime);
-    if (success) {
-      toast.success("Payment recorded successfully!");
-      
-      setSelectedCustomerId("");
-      setSelectedSiteId("");
-      setAmount("");
-      setPaymentMethod("Cash");
-      setCustomPaymentMethod("");
-      setPaymentDate(new Date().toISOString().split("T")[0]);
-      setPaymentTime(new Date().toTimeString().slice(0, 5));
-      onSuccess();
-      onOpenChange(false);
-    } else {
-      toast.error("Failed to record payment");
+    setSubmitting(true);
+    try {
+      const success = await recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime);
+      if (success) {
+        toast.success("Payment recorded successfully!");
+        
+        setSelectedCustomerId("");
+        setSelectedSiteId("");
+        setAmount("");
+        setPaymentMethod("Cash");
+        setCustomPaymentMethod("");
+        setPaymentDate(new Date().toISOString().split("T")[0]);
+        setPaymentTime(new Date().toTimeString().slice(0, 5));
+        onSuccess();
+        onOpenChange(false);
+      } else {
+        toast.error("Failed to record payment");
+      }
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast.error('Failed to record payment');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -82,7 +113,7 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Record Payment/Deposit</DialogTitle>
+          <DialogTitle>Record Site Payment</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {!preSelectedCustomerId && (
@@ -281,11 +312,11 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              Record Payment/Deposit
+            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={submitting}>
+              {submitting ? "Recording..." : "Record Site Payment"}
             </Button>
           </div>
         </form>

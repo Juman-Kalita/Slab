@@ -31,7 +31,7 @@ export function generateInvoice(data: InvoiceData): void {
   // Company Header
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
-  doc.text("MATERIAL RENTAL INVOICE", 105, 20, { align: "center" });
+  doc.text("MATERIAL RENTAL PRO", 105, 20, { align: "center" });
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -102,6 +102,13 @@ export function generateInvoice(data: InvoiceData): void {
   }
   doc.setTextColor(0, 0, 0);
   
+  // Grace Period Note
+  yPos += 8;
+  doc.setFontSize(7);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Note: All materials at this site follow the original issue date (${format(new Date(data.site.issueDate), "dd MMM yyyy")})`, 15, yPos);
+  doc.setTextColor(0, 0, 0);
+  
   // Materials Details Table
   const materialRows = data.materialBreakdown.map(item => [
     `${item.materialType.name} ${item.materialType.size}`,
@@ -134,28 +141,28 @@ export function generateInvoice(data: InvoiceData): void {
   currentY += 8;
   
   const breakdown = [
-    ["Rent Amount (Grace Period)", `₹${data.rentAmount.toLocaleString("en-IN")}`],
-    ["Issue Loading Charges", `₹${data.issueLoadingCharges.toLocaleString("en-IN")}`],
+    ["Rent Amount (Based on Grace Period)", `₹${data.rentAmount.toLocaleString("en-IN")}`],
+    ["Issue Loading & Unloading Charges", `₹${data.issueLoadingCharges.toLocaleString("en-IN")}`],
   ];
   
   if (data.penaltyAmount > 0) {
-    breakdown.push([`Late Penalty (${data.daysOverdue} days)`, `₹${data.penaltyAmount.toLocaleString("en-IN")}`]);
+    breakdown.push([`Late Penalty (${data.daysOverdue} days overdue)`, `₹${data.penaltyAmount.toLocaleString("en-IN")}`]);
   }
   
   breakdown.push(["Subtotal", `₹${(data.rentAmount + data.issueLoadingCharges + data.penaltyAmount).toLocaleString("en-IN")}`]);
-  breakdown.push(["Less: Paid", `-₹${data.site.amountPaid.toLocaleString("en-IN")}`]);
-  breakdown.push(["Unpaid from Grace Period", `₹${Math.max(0, data.rentAmount + data.issueLoadingCharges + data.penaltyAmount - data.site.amountPaid).toLocaleString("en-IN")}`]);
+  breakdown.push(["Less: Amount Paid", `-₹${data.site.amountPaid.toLocaleString("en-IN")}`]);
+  breakdown.push(["Balance from Grace Period", `₹${Math.max(0, data.rentAmount + data.issueLoadingCharges + data.penaltyAmount - data.site.amountPaid).toLocaleString("en-IN")}`]);
   
   if (data.returnLoadingCharges > 0 || data.lostItemsPenalty > 0) {
     breakdown.push(["", ""]);
     breakdown.push(["Additional Charges:", ""]);
     
     if (data.returnLoadingCharges > 0) {
-      breakdown.push(["Return Loading Charges", `₹${data.returnLoadingCharges.toLocaleString("en-IN")}`]);
+      breakdown.push(["Return Loading & Unloading Charges", `₹${data.returnLoadingCharges.toLocaleString("en-IN")}`]);
     }
     
     if (data.lostItemsPenalty > 0) {
-      breakdown.push(["Lost Items Penalty", `₹${data.lostItemsPenalty.toLocaleString("en-IN")}`]);
+      breakdown.push(["Lost/Damaged Items Penalty", `₹${data.lostItemsPenalty.toLocaleString("en-IN")}`]);
     }
   }
   
@@ -243,15 +250,17 @@ export function generateInvoice(data: InvoiceData): void {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   const terms = [
-    "• Payment must be made within the grace period (30 days from issue date)",
-    "• Late payment penalty: ₹10 per item per day after grace period",
+    "• Grace period is based on the ORIGINAL site issue date, not individual materials",
+    "• Materials added later follow the same grace period as the original site",
+    "• Late payment penalty: ₹10 per item per day after grace period expires",
     "• Returns before full payment do not reduce the amount owed for the grace period",
     "• Lost items are charged at the penalty rate specified per material type",
     "• Loading/Unloading charges apply unless customer provides own labor",
+    "• Custom loading charges may apply based on distance and circumstances",
   ];
   
   terms.forEach((term, index) => {
-    doc.text(term, 15, currentY + 6 + (index * 5));
+    doc.text(term, 15, currentY + 6 + (index * 4.5));
   });
   
   // Footer

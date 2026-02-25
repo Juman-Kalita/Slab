@@ -1,27 +1,34 @@
 import { supabase } from './supabase';
 import { dbToCustomer, customerToDb, siteToDb, materialToDb, historyEventToDb } from './supabase-transformers';
 import type { Customer } from './rental-store';
+import { MATERIAL_TYPES } from './rental-store';
 
 // Fetch all customers with nested data
 export async function getCustomers(): Promise<Customer[]> {
-  const { data, error } = await supabase
-    .from('customers')
-    .select(`
-      *,
-      sites (
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select(`
         *,
-        materials (*),
-        history_events (*)
-      )
-    `)
-    .order('created_date', { ascending: false });
+        sites (
+          *,
+          materials (*),
+          history_events (*)
+        )
+      `)
+      .order('created_date', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching customers:', error);
-    throw error;
+    if (error) {
+      console.error('Error fetching customers from Supabase:', error);
+      // Return empty array if tables don't exist yet
+      return [];
+    }
+
+    return (data || []).map(dbToCustomer);
+  } catch (error) {
+    console.error('Supabase connection error:', error);
+    return [];
   }
-
-  return (data || []).map(dbToCustomer);
 }
 
 // Create a new customer with site and materials
@@ -316,18 +323,45 @@ export async function resetMaterialInitialQuantities(siteId: string): Promise<vo
 
 // Inventory operations
 export async function getInventory(): Promise<Record<string, number>> {
-  const { data, error } = await supabase
-    .from('inventory')
-    .select('material_type_id, quantity');
+  try {
+    const { data, error } = await supabase
+      .from('inventory')
+      .select('material_type_id, quantity');
 
-  if (error) throw error;
+    if (error) {
+      console.error('Error fetching inventory from Supabase:', error);
+      // Return default inventory if table doesn't exist
+      const defaultInventory: Record<string, number> = {};
+      MATERIAL_TYPES.forEach(mt => {
+        defaultInventory[mt.id] = mt.inventory;
+      });
+      return defaultInventory;
+    }
 
-  const inventory: Record<string, number> = {};
-  (data || []).forEach(item => {
-    inventory[item.material_type_id] = item.quantity;
-  });
+    const inventory: Record<string, number> = {};
+    (data || []).forEach(item => {
+      inventory[item.material_type_id] = item.quantity;
+    });
 
-  return inventory;
+    // If inventory is empty, return default
+    if (Object.keys(inventory).length === 0) {
+      const defaultInventory: Record<string, number> = {};
+      MATERIAL_TYPES.forEach(mt => {
+        defaultInventory[mt.id] = mt.inventory;
+      });
+      return defaultInventory;
+    }
+
+    return inventory;
+  } catch (error) {
+    console.error('Supabase connection error:', error);
+    // Return default inventory on error
+    const defaultInventory: Record<string, number> = {};
+    MATERIAL_TYPES.forEach(mt => {
+      defaultInventory[mt.id] = mt.inventory;
+    });
+    return defaultInventory;
+  }
 }
 
 export async function updateInventory(materialTypeId: string, quantity: number): Promise<void> {

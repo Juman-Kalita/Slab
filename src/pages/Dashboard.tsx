@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { logout, getCustomers, getDashboardStats, calculateRent, getMaterialType, calculateSiteRent, type Customer } from "@/lib/rental-store";
 import { generateInvoice, generateInvoiceNumber } from "@/lib/invoice-generator";
@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { HardHat, LogOut, Users, Package, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, PackageSearch, X, Download } from "lucide-react";
+import { HardHat, LogOut, Users, Package, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, PackageSearch, Download } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import IssueMaterialsDialog from "@/components/IssueMaterialsDialog";
 import RecordMaterialReturnDialog from "@/components/RecordMaterialReturnDialog";
 import RecordPaymentDialog from "@/components/RecordPaymentDialog";
+import RecordDepositDialog from "@/components/RecordDepositDialog";
 import InventoryDialog from "@/components/InventoryDialog";
 import AddSiteDialog from "@/components/AddSiteDialog";
+import IssueMoreMaterialsDialog from "@/components/IssueMoreMaterialsDialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -26,14 +29,20 @@ const Dashboard = () => {
   const [issueOpen, setIssueOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [issueMoreOpen, setIssueMoreOpen] = useState(false);
+  const [selectedSite, setSelectedSite] = useState<{ siteName: string; location: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [stats, setStats] = useState({ totalCustomers: 0, totalItemsRented: 0, totalPendingAmount: 0 });
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     setRefreshKey((k) => k + 1);
     // If a customer is selected, refresh their data
     if (selectedCustomer) {
-      const updatedCustomers = getCustomers();
+      const updatedCustomers = await getCustomers();
       const updatedCustomer = updatedCustomers.find(c => c.id === selectedCustomer.id);
       if (updatedCustomer) {
         setSelectedCustomer(updatedCustomer);
@@ -41,8 +50,25 @@ const Dashboard = () => {
     }
   }, [selectedCustomer]);
 
-  const stats = getDashboardStats();
-  const customers = getCustomers();
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [customersData, statsData] = await Promise.all([
+          getCustomers(),
+          getDashboardStats()
+        ]);
+        setCustomers(customersData);
+        setStats(statsData);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        toast.error('Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [refreshKey]);
 
   // Filter by customer name/contact/address
   let filtered = search
@@ -72,8 +98,16 @@ const Dashboard = () => {
     navigate("/");
   };
 
-  // Force re-read when refreshKey changes
-  void refreshKey;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleDownloadInvoice = (customer: Customer, siteId: string) => {
     const site = customer.sites.find(s => s.id === siteId);
@@ -144,7 +178,10 @@ const Dashboard = () => {
               <RotateCcw className="h-4 w-4" /> Record Return
             </Button>
             <Button onClick={() => setPaymentOpen(true)} variant="outline" className="gap-2 font-semibold">
-              <Wallet className="h-4 w-4" /> Record Payment/Deposit
+              <Wallet className="h-4 w-4" /> Record Site Payment
+            </Button>
+            <Button onClick={() => setDepositOpen(true)} className="gap-2 font-semibold bg-green-600 hover:bg-green-700">
+              <Wallet className="h-4 w-4" /> Add Deposit
             </Button>
             <Button onClick={() => setInventoryOpen(true)} variant="outline" className="gap-2 font-semibold">
               <PackageSearch className="h-4 w-4" /> View Inventory
@@ -153,13 +190,26 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">{customer.name}</h2>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold">{customer.name}</h2>
+                  {customer.contactNo && (
+                    <p className="text-sm text-muted-foreground mt-1">📞 {customer.contactNo}</p>
+                  )}
+                </div>
                 {customer.advanceDeposit > 0 && (
-                  <div className="bg-green-100 dark:bg-green-900/20 border-2 border-green-500 rounded-lg px-4 py-2">
-                    <div className="text-xs text-green-700 dark:text-green-400 font-medium">Advance Deposit</div>
-                    <div className="text-xl font-bold text-green-600 dark:text-green-400">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-2 border-green-500 rounded-xl px-6 py-4 shadow-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Wallet className="h-5 w-5 text-green-600" />
+                      <div className="text-xs text-green-700 dark:text-green-400 font-semibold uppercase tracking-wide">
+                        Advance Deposit
+                      </div>
+                    </div>
+                    <div className="text-3xl font-bold text-green-600 dark:text-green-400">
                       ₹{customer.advanceDeposit.toLocaleString("en-IN")}
+                    </div>
+                    <div className="text-xs text-green-600/70 dark:text-green-400/70 mt-1">
+                      Available for any site
                     </div>
                   </div>
                 )}
@@ -213,6 +263,105 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
+          {/* Overall Summary Boxes - ALL SITES */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Total Issued Across All Sites */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="border-2 rounded-xl p-4 bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:shadow-lg transition-all hover:scale-105">
+                  <div className="text-xs text-blue-700 dark:text-blue-400 font-semibold uppercase tracking-wide mb-2">
+                    Total Issued
+                  </div>
+                  <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+                    {customer.sites.reduce((total, site) => {
+                      return total + site.history
+                        .filter(h => h.action === "Issued")
+                        .reduce((sum, h) => sum + (h.quantity || 0), 0);
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-1">
+                    items • Click for details
+                  </div>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-96">
+                <div className="space-y-3">
+                  <h4 className="font-semibold">All Issued Materials</h4>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {customer.sites.map((site) => {
+                      const siteIssued = site.history.filter(h => h.action === "Issued" && h.materialTypeId && h.quantity);
+                      if (siteIssued.length === 0) return null;
+                      
+                      return (
+                        <div key={site.id} className="border-b pb-3">
+                          <div className="font-semibold text-sm mb-2 text-primary">{site.siteName} ({site.location})</div>
+                          <div className="space-y-1">
+                            {siteIssued.map((h, idx) => {
+                              const mt = getMaterialType(h.materialTypeId!);
+                              return (
+                                <div key={idx} className="flex justify-between items-center text-sm pl-3">
+                                  <div>
+                                    <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {format(new Date(h.date), "dd MMM yyyy")}
+                                    </div>
+                                  </div>
+                                  <div className="font-semibold text-blue-600">{h.quantity}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t pt-2 flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-blue-600">
+                      {customer.sites.reduce((total, site) => {
+                        return total + site.history
+                          .filter(h => h.action === "Issued")
+                          .reduce((sum, h) => sum + (h.quantity || 0), 0);
+                      }, 0)} items
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Total Returned Across All Sites */}
+            <div className="border-2 rounded-xl p-4 bg-green-50 dark:bg-green-900/20">
+              <div className="text-xs text-green-700 dark:text-green-400 font-semibold uppercase tracking-wide mb-2">
+                Total Returned
+              </div>
+              <div className="text-4xl font-bold text-green-600 dark:text-green-400">
+                {customer.sites.reduce((total, site) => {
+                  return total + site.history
+                    .filter(h => h.action === "Returned")
+                    .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+                }, 0)}
+              </div>
+              <div className="text-xs text-green-600/70 dark:text-green-400/70 mt-1">
+                items
+              </div>
+            </div>
+
+            {/* Currently Held Across All Sites */}
+            <div className="border-2 rounded-xl p-4 bg-orange-50 dark:bg-orange-900/20">
+              <div className="text-xs text-orange-700 dark:text-orange-400 font-semibold uppercase tracking-wide mb-2">
+                Currently Held
+              </div>
+              <div className="text-4xl font-bold text-orange-600 dark:text-orange-400">
+                {customer.sites.reduce((total, site) => {
+                  return total + site.materials.reduce((sum, m) => sum + m.quantity, 0);
+                }, 0)}
+              </div>
+              <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-1">
+                items
+              </div>
+            </div>
+          </div>
+
           {/* Sites List */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Sites ({customer.sites.length})</h3>
@@ -241,6 +390,17 @@ const Dashboard = () => {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => {
+                            setSelectedSite({ siteName: site.siteName, location: site.location });
+                            setIssueMoreOpen(true);
+                          }}
+                          className="gap-1 bg-accent/10 hover:bg-accent/20"
+                        >
+                          <Plus className="h-4 w-4" /> Issue More
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDownloadInvoice(customer, site.id)}
                           className="gap-1"
                         >
@@ -253,18 +413,54 @@ const Dashboard = () => {
                       </div>
                     </div>
 
-                    {/* Items Summary */}
+                    {/* Items Summary - MOVED TO TOP */}
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20">
-                        <div className="text-xs text-muted-foreground mb-1">Total Issued</div>
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalIssued}</div>
-                        <div className="text-xs text-muted-foreground">items</div>
-                      </div>
+                      {/* Total Issued with Details */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:shadow-md transition-shadow">
+                            <div className="text-xs text-muted-foreground mb-1">Total Issued</div>
+                            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalIssued}</div>
+                            <div className="text-xs text-muted-foreground">items • Click for details</div>
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="space-y-3">
+                            <h4 className="font-semibold text-sm">Issued Materials Breakdown</h4>
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {site.history
+                                .filter(h => h.action === "Issued" && h.materialTypeId && h.quantity)
+                                .map((h, idx) => {
+                                  const mt = getMaterialType(h.materialTypeId!);
+                                  return (
+                                    <div key={idx} className="flex justify-between items-center text-sm border-b pb-2">
+                                      <div>
+                                        <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {format(new Date(h.date), "dd MMM yyyy")}
+                                        </div>
+                                      </div>
+                                      <div className="font-semibold text-blue-600">{h.quantity} items</div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                            <div className="border-t pt-2 flex justify-between font-bold">
+                              <span>Total:</span>
+                              <span className="text-blue-600">{totalIssued} items</span>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Total Returned */}
                       <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-900/20">
                         <div className="text-xs text-muted-foreground mb-1">Total Returned</div>
                         <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalReturned}</div>
                         <div className="text-xs text-muted-foreground">items</div>
                       </div>
+
+                      {/* Currently Held */}
                       <div className="border rounded-lg p-3 bg-orange-50 dark:bg-orange-900/20">
                         <div className="text-xs text-muted-foreground mb-1">Currently Held</div>
                         <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{totalItems}</div>
@@ -425,6 +621,12 @@ const Dashboard = () => {
           onSuccess={refresh}
           preSelectedCustomerId={customer.id}
         />
+        <RecordDepositDialog 
+          open={depositOpen} 
+          onOpenChange={setDepositOpen} 
+          onSuccess={refresh}
+          preSelectedCustomerId={customer.id}
+        />
         <InventoryDialog open={inventoryOpen} onOpenChange={setInventoryOpen} />
         <AddSiteDialog 
           open={addSiteOpen} 
@@ -432,6 +634,16 @@ const Dashboard = () => {
           onSuccess={refresh}
           customerName={customer.name}
         />
+        {selectedSite && (
+          <IssueMoreMaterialsDialog
+            open={issueMoreOpen}
+            onOpenChange={setIssueMoreOpen}
+            onSuccess={refresh}
+            customerName={customer.name}
+            siteName={selectedSite.siteName}
+            location={selectedSite.location}
+          />
+        )}
       </div>
     );
   }
@@ -480,7 +692,10 @@ const Dashboard = () => {
             <RotateCcw className="h-4 w-4" /> Record Return
           </Button>
           <Button onClick={() => setPaymentOpen(true)} variant="outline" className="gap-2 font-semibold">
-            <Wallet className="h-4 w-4" /> Record Payment/Deposit
+            <Wallet className="h-4 w-4" /> Record Site Payment
+          </Button>
+          <Button onClick={() => setDepositOpen(true)} className="gap-2 font-semibold bg-green-600 hover:bg-green-700">
+            <Wallet className="h-4 w-4" /> Add Deposit
           </Button>
           <Button onClick={() => setInventoryOpen(true)} variant="outline" className="gap-2 font-semibold">
             <PackageSearch className="h-4 w-4" /> View Inventory
@@ -592,6 +807,7 @@ const Dashboard = () => {
       <IssueMaterialsDialog open={issueOpen} onOpenChange={setIssueOpen} onSuccess={refresh} />
       <RecordMaterialReturnDialog open={returnOpen} onOpenChange={setReturnOpen} onSuccess={refresh} />
       <RecordPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} onSuccess={refresh} />
+      <RecordDepositDialog open={depositOpen} onOpenChange={setDepositOpen} onSuccess={refresh} />
       <InventoryDialog open={inventoryOpen} onOpenChange={setInventoryOpen} />
     </div>
   );

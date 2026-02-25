@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,18 +27,41 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
   const [quantityLost, setQuantityLost] = useState("0");
   const [hasOwnLabor, setHasOwnLabor] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Use pre-selected customer if provided
   const effectiveCustomerId = preSelectedCustomerId || selectedCustomerId;
+
+  // Load customers when dialog opens
+  useEffect(() => {
+    if (open) {
+      const loadCustomers = async () => {
+        setLoading(true);
+        try {
+          const data = await getCustomers();
+          const filtered = data.filter((c: any) => c.sites.some((s: any) => s.materials.some((m: any) => m.quantity > 0)));
+          setCustomers(filtered);
+        } catch (error) {
+          console.error('Error loading customers:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadCustomers();
+    }
+  }, [open]);
   
-  const customers = getCustomers().filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
   const selectedCustomer = customers.find((c) => c.id === effectiveCustomerId);
-  const selectedSite = selectedCustomer?.sites.find(s => s.id === selectedSiteId);
-  const selectedMaterial = selectedSite?.materials.find(m => m.materialTypeId === selectedMaterialTypeId);
+  const selectedSite = selectedCustomer?.sites.find((s: any) => s.id === selectedSiteId);
+  const selectedMaterial = selectedSite?.materials.find((m: any) => m.materialTypeId === selectedMaterialTypeId);
   const materialType = selectedMaterial ? getMaterialType(selectedMaterial.materialTypeId) : null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    
     if (!effectiveCustomerId || !selectedSiteId || !selectedMaterialTypeId || !quantityReturned) {
       toast.error("Please fill all required fields");
       return;
@@ -62,20 +85,28 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
       return;
     }
 
-    const success = recordReturn(effectiveCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
-    if (success) {
-      const lostMessage = qtyLost > 0 ? ` (${qtyLost} lost)` : "";
-      toast.success(`Recorded return of ${qtyReturned} items${lostMessage}`);
-      setSelectedCustomerId("");
-      setSelectedSiteId("");
-      setSelectedMaterialTypeId("");
-      setQuantityReturned("");
-      setQuantityLost("0");
-      setHasOwnLabor(false);
-      onSuccess();
-      onOpenChange(false);
-    } else {
-      toast.error("Failed to record return. Check quantity.");
+    setSubmitting(true);
+    try {
+      const success = await recordReturn(effectiveCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
+      if (success) {
+        const lostMessage = qtyLost > 0 ? ` (${qtyLost} lost)` : "";
+        toast.success(`Recorded return of ${qtyReturned} items${lostMessage}`);
+        setSelectedCustomerId("");
+        setSelectedSiteId("");
+        setSelectedMaterialTypeId("");
+        setQuantityReturned("");
+        setQuantityLost("0");
+        setHasOwnLabor(false);
+        onSuccess();
+        onOpenChange(false);
+      } else {
+        toast.error("Failed to record return. Check quantity.");
+      }
+    } catch (error) {
+      console.error('Error recording return:', error);
+      toast.error('Failed to record return');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -247,11 +278,11 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              Record Return
+            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={submitting}>
+              {submitting ? "Recording..." : "Record Return"}
             </Button>
           </div>
         </form>
