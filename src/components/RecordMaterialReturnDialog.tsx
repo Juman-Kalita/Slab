@@ -26,6 +26,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
   const [quantityReturned, setQuantityReturned] = useState("");
   const [quantityLost, setQuantityLost] = useState("0");
   const [hasOwnLabor, setHasOwnLabor] = useState(false);
+  const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -87,7 +88,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
 
     setSubmitting(true);
     try {
-      const success = await recordReturn(effectiveCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor);
+      const success = await recordReturn(effectiveCustomerId, selectedSiteId, selectedMaterialTypeId, qtyReturned, qtyLost, hasOwnLabor, returnDate);
       if (success) {
         const lostMessage = qtyLost > 0 ? ` (${qtyLost} lost)` : "";
         toast.success(`Recorded return of ${qtyReturned} items${lostMessage}`);
@@ -97,6 +98,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
         setQuantityReturned("");
         setQuantityLost("0");
         setHasOwnLabor(false);
+        setReturnDate(new Date().toISOString().split("T")[0]);
         onSuccess();
         onOpenChange(false);
       } else {
@@ -236,6 +238,20 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
               </div>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="returnDate">Return Date</Label>
+            <Input
+              id="returnDate"
+              type="date"
+              value={returnDate}
+              onChange={(e) => setReturnDate(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
+            />
+            <p className="text-xs text-muted-foreground">
+              Select the actual date materials were returned
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="quantityReturned">Quantity Returned</Label>

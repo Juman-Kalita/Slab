@@ -444,7 +444,8 @@ export async function recordReturn(
   materialTypeId: string,
   quantityReturned: number,
   quantityLost: number,
-  hasOwnLabor: boolean
+  hasOwnLabor: boolean,
+  returnDate?: string
 ): Promise<boolean> {
   try {
     const customers = await getCustomers();
@@ -463,7 +464,7 @@ export async function recordReturn(
     
     // Add history event
     await SupabaseStore.addHistoryEvent(siteId, {
-      date: new Date().toISOString(),
+      date: returnDate || new Date().toISOString(),
       action: "Returned",
       materialTypeId,
       quantity: quantityReturned,
@@ -757,4 +758,42 @@ export async function getDashboardStats() {
     totalItemsRented,
     totalPendingAmount,
   };
+}
+
+// Delete customer and restore inventory
+export async function deleteCustomer(customerId: string): Promise<boolean> {
+  try {
+    const customers = await getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    
+    if (!customer) {
+      console.error('Customer not found');
+      return false;
+    }
+
+    // Restore all materials from all sites back to inventory
+    for (const site of customer.sites) {
+      for (const material of site.materials) {
+        if (material.quantity > 0) {
+          // Add materials back to inventory
+          const restored = await updateInventory(material.materialTypeId, material.quantity);
+          if (!restored) {
+            console.error(`Failed to restore ${material.quantity} of ${material.materialTypeId}`);
+          }
+        }
+      }
+    }
+
+    // Delete customer from database
+    const deleted = await SupabaseStore.deleteCustomer(customerId);
+    
+    if (deleted) {
+      console.log(`Customer ${customer.name} deleted and ${customer.sites.reduce((total, site) => total + site.materials.reduce((sum, m) => sum + m.quantity, 0), 0)} items restored to inventory`);
+    }
+    
+    return deleted;
+  } catch (error) {
+    console.error('Error deleting customer:', error);
+    return false;
+  }
 }

@@ -390,3 +390,23 @@ export async function adjustInventory(materialTypeId: string, change: number): P
   await updateInventory(materialTypeId, newQty);
   return true;
 }
+
+// Delete customer
+export async function deleteCustomer(customerId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', customerId);
+
+    if (error) {
+      console.error('Error deleting customer:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in deleteCustomer:', error);
+    return false;
+  }
+}
