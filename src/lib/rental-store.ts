@@ -23,14 +23,14 @@ export const MATERIAL_TYPES: MaterialType[] = [
   { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
   
   // PROPS Category - 30 Days
-  { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
+  { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83334, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
   { id: "props-2x2.5", category: "Props", name: "Props", size: "2mx2.5m", rentPerDay: 3, loadingCharge: 3, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 650 },
-  { id: "props-2x3", category: "Props", name: "Props", size: "2mx3m", rentPerDay: 3.33, loadingCharge: 3, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 1243 },
-  { id: "props-2x3.5", category: "Props", name: "Props", size: "2mx3.5m", rentPerDay: 3.66, loadingCharge: 3, lostItemPenalty: 1920, gracePeriodDays: 30, inventory: 225 },
+  { id: "props-2x3", category: "Props", name: "Props", size: "2mx3m", rentPerDay: 3.33334, loadingCharge: 3, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 1243 },
+  { id: "props-2x3.5", category: "Props", name: "Props", size: "2mx3.5m", rentPerDay: 3.66667, loadingCharge: 3, lostItemPenalty: 1920, gracePeriodDays: 30, inventory: 225 },
   { id: "props-2x4", category: "Props", name: "Props", size: "2mx4m", rentPerDay: 4, loadingCharge: 3, lostItemPenalty: 2000, gracePeriodDays: 30, inventory: 287 },
   
   // SPAN Category - 30 Days
-  { id: "box-span", category: "Span", name: "Box Span", size: "", rentPerDay: 4.16, loadingCharge: 3, lostItemPenalty: 2240, gracePeriodDays: 30, inventory: 512 },
+  { id: "box-span", category: "Span", name: "Box Span", size: "", rentPerDay: 4.16667, loadingCharge: 3, lostItemPenalty: 2240, gracePeriodDays: 30, inventory: 512 },
   { id: "zig-zag-span", category: "Span", name: "Zig-Zag Span", size: "", rentPerDay: 6, loadingCharge: 5, lostItemPenalty: 3200, gracePeriodDays: 30, inventory: 224 },
   
   // H FRAME Category - 30 Days
@@ -49,11 +49,11 @@ export const MATERIAL_TYPES: MaterialType[] = [
   { id: "vertical-1.5m", category: "Scaffolding", name: "Vertical", size: "1.5m", rentPerDay: 1.5, loadingCharge: 2, lostItemPenalty: 560, gracePeriodDays: 30, inventory: 547 },
   { id: "vertical-1m", category: "Scaffolding", name: "Vertical", size: "1m", rentPerDay: 1, loadingCharge: 2, lostItemPenalty: 373.33, gracePeriodDays: 30, inventory: 307 },
   { id: "vertical-0.5m", category: "Scaffolding", name: "Vertical", size: "0.5m", rentPerDay: 0.5, loadingCharge: 2, lostItemPenalty: 186.66, gracePeriodDays: 30, inventory: 91 },
-  { id: "ledger-2m", category: "Scaffolding", name: "Ledger", size: "2m", rentPerDay: 1.66, loadingCharge: 1, lostItemPenalty: 573.33, gracePeriodDays: 30, inventory: 71 },
+  { id: "ledger-2m", category: "Scaffolding", name: "Ledger", size: "2m", rentPerDay: 1.66667, loadingCharge: 1, lostItemPenalty: 573.33, gracePeriodDays: 30, inventory: 71 },
   { id: "ledger-1.5m", category: "Scaffolding", name: "Ledger", size: "1.5m", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 429.6, gracePeriodDays: 30, inventory: 153 },
   { id: "ledger-1.2m", category: "Scaffolding", name: "Ledger", size: "1.2m", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 344, gracePeriodDays: 30, inventory: 4686 },
-  { id: "ledger-1m", category: "Scaffolding", name: "Ledger", size: "1m", rentPerDay: 0.83, loadingCharge: 1, lostItemPenalty: 286.66, gracePeriodDays: 30, inventory: 1034 },
-  { id: "joint-pins", category: "Scaffolding", name: "Joint Pins", size: "", rentPerDay: 0.33, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 1282 },
+  { id: "ledger-1m", category: "Scaffolding", name: "Ledger", size: "1m", rentPerDay: 0.83334, loadingCharge: 1, lostItemPenalty: 286.66, gracePeriodDays: 30, inventory: 1034 },
+  { id: "joint-pins", category: "Scaffolding", name: "Joint Pins", size: "", rentPerDay: 0.33334, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 1282 },
   { id: "planks-scaffolding", category: "Scaffolding", name: "Planks", size: "", rentPerDay: 5, loadingCharge: 4, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 0 },
   { id: "base-jack-scaffolding", category: "Scaffolding", name: "Base Jack", size: "", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 0 },
   { id: "stirrup-head", category: "Scaffolding", name: "Stirrup Head", size: "", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 1201 },
@@ -62,7 +62,7 @@ export const MATERIAL_TYPES: MaterialType[] = [
   // BRACING PIPE Category - 30 Days
   { id: "bracing-pipe-20ft", category: "Bracing Pipe", name: "Bracing Pipe", size: "20'/6m", rentPerDay: 5, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 154 },
   { id: "bracing-pipe-10ft", category: "Bracing Pipe", name: "Bracing Pipe", size: "10'/3m", rentPerDay: 2.5, loadingCharge: 2, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "coupler", category: "Bracing Pipe", name: "Coupler", size: "", rentPerDay: 0.33, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 591 },
+  { id: "coupler", category: "Bracing Pipe", name: "Coupler", size: "", rentPerDay: 0.33334, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 591 },
   
   // C CHANNEL Category - 30 Days
   { id: "c-channel-3-5m", category: "C Channel", name: "C Channel 3\"", size: "5m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
@@ -81,7 +81,7 @@ export const MATERIAL_TYPES: MaterialType[] = [
   { id: "round-column-18", category: "Round Column", name: "Round Column", size: "18\"", rentPerDay: 0, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 2 },
   
   // EXTRA Category - 30 Days
-  { id: "tie-rod", category: "Extra", name: "Tie Rod", size: "", rentPerDay: 0.83, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "tie-rod", category: "Extra", name: "Tie Rod", size: "1.2m", rentPerDay: 0.83334, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   { id: "tie-channel-2", category: "Extra", name: "Tie Channel", size: "2'", rentPerDay: 1.5, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   { id: "tie-channel-4", category: "Extra", name: "Tie Channel", size: "4'", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   { id: "anchor-nut", category: "Extra", name: "Anchor Nut", size: "", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
