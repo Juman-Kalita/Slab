@@ -251,6 +251,7 @@ export async function addHistoryEvent(
     hasOwnLabor?: boolean;
     quantityLost?: number;
     paymentMethod?: string;
+    paymentScreenshot?: string;
   }
 ): Promise<void> {
   const { error } = await supabase

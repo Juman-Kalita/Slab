@@ -30,6 +30,7 @@ interface SiteLine {
   materials: MaterialLine[];
   vehicleNo?: string;
   challanNo?: string;
+  transportationCharge?: string;
 }
 
 const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsDialogProps) => {
@@ -40,7 +41,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }],
+      transportationCharge: ""
     }
   ]);
   const [submitting, setSubmitting] = useState(false);
@@ -104,7 +106,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       id: crypto.randomUUID(),
       siteName: "",
       location: "",
-      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]
+      materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }],
+      transportationCharge: ""
     }]);
   };
 
@@ -114,7 +117,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
     }
   };
 
-  const updateSiteLine = (siteId: string, field: 'siteName' | 'location' | 'vehicleNo' | 'challanNo', value: string) => {
+  const updateSiteLine = (siteId: string, field: 'siteName' | 'location' | 'vehicleNo' | 'challanNo' | 'transportationCharge', value: string) => {
     setSiteLines(siteLines.map(site =>
       site.id === siteId ? { ...site, [field]: value } : site
     ));
@@ -253,7 +256,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
         id: crypto.randomUUID(),
         siteName: "",
         location: "",
-        materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]
+        materials: [{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }],
+        transportationCharge: ""
       }]);
       onSuccess();
       onOpenChange(false);
@@ -451,6 +455,20 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                             onChange={(e) => updateSiteLine(site.id, 'challanNo', e.target.value)}
                           />
                         </div>
+                      </div>
+                      <div className="space-y-2 mt-3">
+                        <Label htmlFor={`transportationCharge-${site.id}`} className="text-xs">Transportation Charge (₹)</Label>
+                        <Input
+                          id={`transportationCharge-${site.id}`}
+                          type="number"
+                          placeholder="Enter transportation charge"
+                          value={site.transportationCharge || ''}
+                          onChange={(e) => updateSiteLine(site.id, 'transportationCharge', e.target.value)}
+                          min="0"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Additional charge for transportation/delivery
+                        </p>
                       </div>
                     </div>
 

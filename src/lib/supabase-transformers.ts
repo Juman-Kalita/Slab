@@ -52,7 +52,8 @@ export function dbToHistoryEvent(dbEvent: any): HistoryEvent {
     amount: dbEvent.amount ? parseFloat(dbEvent.amount) : undefined,
     hasOwnLabor: dbEvent.has_own_labor,
     quantityLost: dbEvent.quantity_lost,
-    paymentMethod: dbEvent.payment_method
+    paymentMethod: dbEvent.payment_method,
+    paymentScreenshot: dbEvent.payment_screenshot
   };
 }
 
@@ -107,6 +108,7 @@ export function historyEventToDb(event: Partial<HistoryEvent>, siteId: string): 
     amount: event.amount,
     has_own_labor: event.hasOwnLabor,
     quantity_lost: event.quantityLost,
-    payment_method: event.paymentMethod
+    payment_method: event.paymentMethod,
+    payment_screenshot: event.paymentScreenshot
   };
 }

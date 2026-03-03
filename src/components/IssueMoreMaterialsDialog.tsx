@@ -31,6 +31,7 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
   const [materialLines, setMaterialLines] = useState<MaterialLine[]>([
     { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }
   ]);
+  const [transportationCharge, setTransportationCharge] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [inventory, setInventory] = useState<Record<string, number>>({});
 
@@ -127,6 +128,7 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
 
       toast.success(`Added ${successCount} material types to ${siteName}`);
       setIssueDate(new Date().toISOString().split("T")[0]);
+      setTransportationCharge("");
       setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]);
       onSuccess();
       onOpenChange(false);
@@ -158,6 +160,21 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
               value={issueDate}
               onChange={(e) => setIssueDate(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="transportationCharge">Transportation Charge (₹) - Optional</Label>
+            <Input
+              id="transportationCharge"
+              type="number"
+              placeholder="Enter transportation charge"
+              value={transportationCharge}
+              onChange={(e) => setTransportationCharge(e.target.value)}
+              min="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              Additional charge for transportation/delivery
+            </p>
           </div>
 
           <div className="space-y-3">

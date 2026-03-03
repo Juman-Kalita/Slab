@@ -112,6 +112,7 @@ export interface HistoryEvent {
   hasOwnLabor?: boolean;
   quantityLost?: number;
   paymentMethod?: string; // Payment method used (Father, Mother, Own, Cash, or custom)
+  paymentScreenshot?: string; // Base64 encoded screenshot for UPI/Bank Transfer
 }
 
 export interface Site {
@@ -642,7 +643,7 @@ export function calculateRent(customer: Customer): {
 }
 
 // Record payment
-export async function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string): Promise<boolean> {
+export async function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string, paymentScreenshot?: string): Promise<boolean> {
   try {
     const customers = await getCustomers();
     const customer = customers.find((c) => c.id === customerId);
@@ -694,7 +695,8 @@ export async function recordPayment(customerId: string, siteId: string, amount: 
           date: recordDate,
           action: "Payment",
           amount: amountForSite,
-          paymentMethod: paymentMethod || "Cash"
+          paymentMethod: paymentMethod || "Cash",
+          paymentScreenshot: paymentScreenshot
         });
       }
     }

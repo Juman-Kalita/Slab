@@ -62,7 +62,8 @@ CREATE TABLE history_events (
   amount DECIMAL(10,2),
   has_own_labor BOOLEAN,
   quantity_lost INTEGER,
-  payment_method TEXT
+  payment_method TEXT,
+  payment_screenshot TEXT
 );
 
 CREATE TABLE inventory (

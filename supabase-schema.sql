@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS history_events (
   has_own_labor BOOLEAN,
   quantity_lost INTEGER,
   payment_method TEXT,
+  payment_screenshot TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

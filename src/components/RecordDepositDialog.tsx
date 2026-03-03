@@ -27,6 +27,7 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [depositDate, setDepositDate] = useState(new Date().toISOString().split("T")[0]);
   const [depositTime, setDepositTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [paymentScreenshot, setPaymentScreenshot] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,6 +94,7 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
       setAmount("");
       setPaymentMethod("Cash");
       setCustomPaymentMethod("");
+      setPaymentScreenshot("");
       setDepositDate(new Date().toISOString().split("T")[0]);
       setDepositTime(new Date().toTimeString().slice(0, 5));
       onSuccess();
@@ -220,6 +222,37 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
                 value={customPaymentMethod}
                 onChange={(e) => setCustomPaymentMethod(e.target.value)}
               />
+            </div>
+          )}
+
+          {(paymentMethod === "UPI" || paymentMethod === "Bank Transfer") && (
+            <div className="space-y-2">
+              <Label htmlFor="paymentScreenshot">Payment Screenshot</Label>
+              <Input
+                id="paymentScreenshot"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 2 * 1024 * 1024) {
+                      toast.error("File size should be less than 2MB");
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setPaymentScreenshot(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="cursor-pointer"
+              />
+              {paymentScreenshot && (
+                <div className="mt-2">
+                  <img src={paymentScreenshot} alt="Payment screenshot preview" className="max-w-xs rounded border" />
+                </div>
+              )}
             </div>
           )}
 
