@@ -198,6 +198,21 @@ export async function updateMaterialQuantity(
   if (error) throw error;
 }
 
+// Update material initial quantity
+export async function updateMaterialInitialQuantity(
+  siteId: string,
+  materialTypeId: string,
+  newInitialQuantity: number
+): Promise<void> {
+  const { error } = await supabase
+    .from('materials')
+    .update({ initial_quantity: newInitialQuantity })
+    .eq('site_id', siteId)
+    .eq('material_type_id', materialTypeId);
+
+  if (error) throw error;
+}
+
 // Add material to existing site
 export async function addMaterialToSite(
   siteId: string,
@@ -377,19 +392,34 @@ export async function updateInventory(materialTypeId: string, quantity: number):
 }
 
 export async function adjustInventory(materialTypeId: string, change: number): Promise<boolean> {
-  const { data: current } = await supabase
+  // Get current inventory
+  const { data: current, error: fetchError } = await supabase
     .from('inventory')
     .select('quantity')
     .eq('material_type_id', materialTypeId)
-    .single();
+    .maybeSingle(); // Use maybeSingle instead of single to handle missing records
+
+  if (fetchError) {
+    console.error('Error fetching inventory:', fetchError);
+    return false;
+  }
 
   const currentQty = current?.quantity || 0;
   const newQty = currentQty + change;
 
-  if (newQty < 0) return false;
+  // Don't allow negative inventory
+  if (newQty < 0) {
+    console.warn(`Cannot adjust inventory for ${materialTypeId}: would result in negative quantity (${newQty})`);
+    return false;
+  }
 
-  await updateInventory(materialTypeId, newQty);
-  return true;
+  try {
+    await updateInventory(materialTypeId, newQty);
+    return true;
+  } catch (error) {
+    console.error('Error updating inventory:', error);
+    return false;
+  }
 }
 
 // Delete customer

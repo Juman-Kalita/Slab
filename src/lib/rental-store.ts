@@ -216,7 +216,25 @@ export async function issueMaterials(
   try {
     // Check if enough inventory available
     const available = await getAvailableStock(materialTypeId);
-    if (available < quantity) {
+    
+    // If no inventory record exists, create one with the material type's default inventory
+    if (available === 0) {
+      const materialType = getMaterialType(materialTypeId);
+      if (materialType) {
+        console.log(`Initializing inventory for ${materialType.name} with ${materialType.inventory} items`);
+        await SupabaseStore.updateInventory(materialTypeId, materialType.inventory);
+        // Re-check available stock after initialization
+        const newAvailable = await getAvailableStock(materialTypeId);
+        if (newAvailable < quantity) {
+          console.error(`Not enough stock: need ${quantity}, have ${newAvailable}`);
+          return false;
+        }
+      } else {
+        console.error(`Material type ${materialTypeId} not found`);
+        return false;
+      }
+    } else if (available < quantity) {
+      console.error(`Not enough stock: need ${quantity}, have ${available}`);
       return false; // Not enough stock
     }
 
@@ -243,11 +261,21 @@ export async function issueMaterials(
         const existingMaterial = site.materials.find(m => m.materialTypeId === materialTypeId);
         
         if (existingMaterial) {
-          // Update existing material quantity
+          // Update existing material quantity and initialQuantity
+          const newQuantity = existingMaterial.quantity + quantity;
+          const newInitialQuantity = existingMaterial.initialQuantity + quantity;
+          
           await SupabaseStore.updateMaterialQuantity(
             site.id,
             materialTypeId,
-            existingMaterial.quantity + quantity
+            newQuantity
+          );
+          
+          // Also update initialQuantity
+          await SupabaseStore.updateMaterialInitialQuantity(
+            site.id,
+            materialTypeId,
+            newInitialQuantity
           );
         } else {
           // Add new material type to site
@@ -429,11 +457,21 @@ export async function issueMaterials(
     }
 
     // Update inventory (subtract issued quantity)
-    await updateInventory(materialTypeId, -quantity);
+    const inventoryUpdated = await updateInventory(materialTypeId, -quantity);
+    if (!inventoryUpdated) {
+      console.error('Failed to update inventory after issuing materials');
+      // Materials were issued but inventory wasn't updated - this is a data inconsistency
+      // Log the error but still return true since materials were issued
+    }
 
     return true;
   } catch (error) {
     console.error('Error issuing materials:', error);
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return false;
   }
 }

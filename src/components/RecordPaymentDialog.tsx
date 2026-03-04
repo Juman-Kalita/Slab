@@ -42,7 +42,15 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
         setLoading(true);
         try {
           const data = await getCustomers();
-          const filtered = data.filter((c) => c.sites.some(s => s.materials.some(m => m.quantity > 0)));
+          // Show customers who have materials OR have unpaid balances
+          const filtered = data.filter((c) => 
+            c.sites.some(s => {
+              const hasActiveMaterials = s.materials.some(m => m.quantity > 0);
+              const siteRent = calculateSiteRent(s);
+              const hasUnpaidBalance = siteRent.remainingDue > 0;
+              return hasActiveMaterials || hasUnpaidBalance;
+            })
+          );
           setCustomers(filtered);
         } catch (error) {
           console.error('Error loading customers:', error);
@@ -183,11 +191,20 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
                   <SelectValue placeholder="Select site" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedCustomer.sites.filter(s => s.materials.some(m => m.quantity > 0)).map((s) => {
+                  {selectedCustomer.sites.filter(s => {
+                    const hasActiveMaterials = s.materials.some(m => m.quantity > 0);
+                    const siteRent = calculateSiteRent(s);
+                    const hasUnpaidBalance = siteRent.remainingDue > 0;
+                    return hasActiveMaterials || hasUnpaidBalance;
+                  }).map((s) => {
                     const totalItems = s.materials.reduce((sum, m) => sum + m.quantity, 0);
+                    const siteRent = calculateSiteRent(s);
+                    const statusText = totalItems > 0 
+                      ? `${totalItems} items` 
+                      : `₹${siteRent.remainingDue.toLocaleString("en-IN")} due`;
                     return (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.siteName} ({s.location}) - {totalItems} items
+                        {s.siteName} ({s.location}) - {statusText}
                       </SelectItem>
                     );
                   })}

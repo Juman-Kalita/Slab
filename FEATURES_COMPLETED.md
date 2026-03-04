@@ -102,6 +102,87 @@
 
 ---
 
+## 5. Return Date Selection ✅
+**Location**: Record Material Return dialog
+
+**What it does**: Allows selecting a custom return date when recording material returns.
+
+**How to use**:
+1. Open "Record Return" dialog
+2. Select return date (defaults to today, max is today)
+3. Record the return with the selected date
+
+**Benefits**:
+- Avoid penalties when recording returns late
+- Accurate historical records
+- Flexibility for backdating legitimate returns
+
+**Files modified**:
+- `src/components/RecordMaterialReturnDialog.tsx`
+- `src/lib/rental-store.ts`
+
+---
+
+## 6. Payment Screenshot Upload ✅
+**Location**: Record Deposit & Record Payment dialogs
+
+**What it does**: Allows uploading payment proof screenshots for UPI and Bank Transfer payments.
+
+**How to use**:
+1. Select payment method: "UPI" or "Bank Transfer"
+2. Screenshot upload field appears automatically
+3. Select image file (max 2MB)
+4. Preview is shown
+5. Submit to save with payment record
+
+**Benefits**:
+- Proof of payment for audit purposes
+- Reduces disputes with customers
+- Better record keeping
+- Easy verification of digital transactions
+
+**Database changes**:
+- Added `payment_screenshot` column to `history_events` table
+- Run `add-payment-screenshot-column.sql` for existing databases
+
+**Files modified**:
+- `src/components/RecordDepositDialog.tsx`
+- `src/components/RecordPaymentDialog.tsx`
+- `src/lib/rental-store.ts`
+
+---
+
+## 7. Multiple Materials Return ✅
+**Location**: Record Material Return dialog
+
+**What it does**: Allows returning multiple different material types in a single transaction.
+
+**How to use**:
+1. Open "Record Return" dialog
+2. Select customer, site, and return date
+3. Fill first material line (type, quantities, own labor)
+4. Click "+ Add Material" to add more material types
+5. Fill additional material lines
+6. Click "Record Return" to process all materials at once
+
+**Features**:
+- Add unlimited material types
+- Each material has independent settings
+- Remove individual lines (minimum 1 required)
+- Smart validation per material
+- Success message shows totals across all materials
+
+**Benefits**:
+- Save time when customer returns multiple materials
+- Consistent with Issue Materials dialog pattern
+- Reduces repetitive form filling
+- All materials recorded with same return date
+
+**Files modified**:
+- `src/components/RecordMaterialReturnDialog.tsx` (complete rewrite)
+
+---
+
 ## Summary
 
 All requested features have been implemented and are working:
@@ -110,6 +191,9 @@ All requested features have been implemented and are working:
 ✅ Issue more materials to existing sites (convenient button on each site)
 ✅ Summary boxes at top of customer page (aggregate view across all sites)
 ✅ Separate payment and deposit options (clear distinction and flexibility)
+✅ Return date selection (avoid penalties when recording late)
+✅ Payment screenshot upload (proof for UPI/Bank Transfer)
+✅ Multiple materials return (bulk return in single transaction)
 
 **Website running at**: http://localhost:5174/
 
@@ -117,3 +201,5 @@ All requested features have been implemented and are working:
 - `CUSTOM_LOADING_CHARGES.md` - Detailed guide for custom loading charges
 - `PAYMENT_VS_DEPOSIT.md` - Explanation of payment vs deposit
 - `SITE_SUMMARY_BOXES.md` - Details about summary boxes feature
+- `PAYMENT_SCREENSHOT_FEATURE.md` - Payment screenshot upload guide
+- `MULTIPLE_MATERIALS_RETURN.md` - Multiple materials return feature guide
