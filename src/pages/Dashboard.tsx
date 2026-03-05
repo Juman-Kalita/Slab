@@ -329,37 +329,124 @@ const Dashboard = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Total Returned Across All Sites */}
-            <div className="border-2 rounded-xl p-4 bg-green-50 dark:bg-green-900/20">
-              <div className="text-xs text-green-700 dark:text-green-400 font-semibold uppercase tracking-wide mb-2">
-                Total Returned
-              </div>
-              <div className="text-4xl font-bold text-green-600 dark:text-green-400">
-                {customer.sites.reduce((total, site) => {
-                  return total + site.history
-                    .filter(h => h.action === "Returned")
-                    .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
-                }, 0)}
-              </div>
-              <div className="text-xs text-green-600/70 dark:text-green-400/70 mt-1">
-                items
-              </div>
-            </div>
+            {/* Total Returned Across All Sites - Interactive */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="border-2 rounded-xl p-4 bg-green-50 dark:bg-green-900/20 cursor-pointer hover:shadow-md transition-shadow">
+                  <div className="text-xs text-green-700 dark:text-green-400 font-semibold uppercase tracking-wide mb-2">
+                    Total Returned
+                  </div>
+                  <div className="text-4xl font-bold text-green-600 dark:text-green-400">
+                    {customer.sites.reduce((total, site) => {
+                      return total + site.history
+                        .filter(h => h.action === "Returned")
+                        .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-green-600/70 dark:text-green-400/70 mt-1">
+                    items • Click for details
+                  </div>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-96 max-h-96 overflow-y-auto" align="start">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm">All Returned Materials</h4>
+                  {customer.sites.map((site) => {
+                    const returnedItems = site.history.filter(h => h.action === "Returned");
+                    if (returnedItems.length === 0) return null;
+                    
+                    return (
+                      <div key={site.id} className="space-y-2">
+                        <div className="font-medium text-sm text-muted-foreground">{site.siteName} ({site.location})</div>
+                        <div className="space-y-1">
+                          {returnedItems.map((h, idx) => {
+                            const mt = getMaterialType(h.materialTypeId!);
+                            const totalQty = (h.quantity || 0) + (h.quantityLost || 0);
+                            return (
+                              <div key={idx} className="flex justify-between items-center text-sm pl-3">
+                                <div>
+                                  <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {format(new Date(h.date), "dd MMM yyyy")}
+                                    {h.quantityLost && h.quantityLost > 0 && (
+                                      <span className="text-red-600 ml-2">• {h.quantityLost} lost</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="font-semibold text-green-600">{totalQty}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="border-t pt-2 flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-green-600">
+                      {customer.sites.reduce((total, site) => {
+                        return total + site.history
+                          .filter(h => h.action === "Returned")
+                          .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+                      }, 0)} items
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
-            {/* Currently Held Across All Sites */}
-            <div className="border-2 rounded-xl p-4 bg-orange-50 dark:bg-orange-900/20">
-              <div className="text-xs text-orange-700 dark:text-orange-400 font-semibold uppercase tracking-wide mb-2">
-                Currently Held
-              </div>
-              <div className="text-4xl font-bold text-orange-600 dark:text-orange-400">
-                {customer.sites.reduce((total, site) => {
-                  return total + site.materials.reduce((sum, m) => sum + m.quantity, 0);
-                }, 0)}
-              </div>
-              <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-1">
-                items
-              </div>
-            </div>
+            {/* Currently Held Across All Sites - Interactive */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="border-2 rounded-xl p-4 bg-orange-50 dark:bg-orange-900/20 cursor-pointer hover:shadow-md transition-shadow">
+                  <div className="text-xs text-orange-700 dark:text-orange-400 font-semibold uppercase tracking-wide mb-2">
+                    Currently Held
+                  </div>
+                  <div className="text-4xl font-bold text-orange-600 dark:text-orange-400">
+                    {customer.sites.reduce((total, site) => {
+                      return total + site.materials.reduce((sum, m) => sum + m.quantity, 0);
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-1">
+                    items • Click for details
+                  </div>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-96 max-h-96 overflow-y-auto" align="start">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm">Currently Held Materials</h4>
+                  {customer.sites.map((site) => {
+                    const heldMaterials = site.materials.filter(m => m.quantity > 0);
+                    if (heldMaterials.length === 0) return null;
+                    
+                    return (
+                      <div key={site.id} className="space-y-2">
+                        <div className="font-medium text-sm text-muted-foreground">{site.siteName} ({site.location})</div>
+                        <div className="space-y-1">
+                          {heldMaterials.map((m) => {
+                            const mt = getMaterialType(m.materialTypeId);
+                            return (
+                              <div key={m.materialTypeId} className="flex justify-between items-center text-sm pl-3">
+                                <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                <div className="font-semibold text-orange-600">{m.quantity}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="border-t pt-2 flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-orange-600">
+                      {customer.sites.reduce((total, site) => {
+                        return total + site.materials.reduce((sum, m) => sum + m.quantity, 0);
+                      }, 0)} items
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Sites List */}

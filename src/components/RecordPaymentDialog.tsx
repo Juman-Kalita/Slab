@@ -24,6 +24,7 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [customPaymentMethod, setCustomPaymentMethod] = useState("");
+  const [paymentDetails, setPaymentDetails] = useState(""); // For UPI ID, Transaction ID, Cheque No, etc.
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentTime, setPaymentTime] = useState(new Date().toTimeString().slice(0, 5));
@@ -103,6 +104,7 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
         setAmount("");
         setPaymentMethod("Cash");
         setCustomPaymentMethod("");
+        setPaymentDetails("");
         setPaymentScreenshot("");
         setPaymentDate(new Date().toISOString().split("T")[0]);
         setPaymentTime(new Date().toTimeString().slice(0, 5));
@@ -305,6 +307,26 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
                 placeholder="Enter payment method"
                 value={customPaymentMethod}
                 onChange={(e) => setCustomPaymentMethod(e.target.value)}
+              />
+            </div>
+          )}
+
+          {(paymentMethod === "UPI" || paymentMethod === "Bank Transfer" || paymentMethod === "Cheque") && (
+            <div className="space-y-2">
+              <Label htmlFor="paymentDetails">
+                {paymentMethod === "UPI" && "UPI Transaction ID / UPI ID"}
+                {paymentMethod === "Bank Transfer" && "Transaction ID / Reference Number"}
+                {paymentMethod === "Cheque" && "Cheque Number"}
+              </Label>
+              <Input
+                id="paymentDetails"
+                placeholder={
+                  paymentMethod === "UPI" ? "Enter UPI ID or Transaction ID" :
+                  paymentMethod === "Bank Transfer" ? "Enter transaction reference" :
+                  "Enter cheque number"
+                }
+                value={paymentDetails}
+                onChange={(e) => setPaymentDetails(e.target.value)}
               />
             </div>
           )}
