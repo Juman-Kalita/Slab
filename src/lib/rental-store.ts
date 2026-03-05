@@ -38,6 +38,7 @@ export const MATERIAL_TYPES: MaterialType[] = [
   { id: "h-frame-without-ladder", category: "H Frame", name: "H-Frame", size: "Without Ladder", rentPerDay: 4, loadingCharge: 5, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 190 },
   { id: "h-frame-1m", category: "H Frame", name: "H-Frame", size: "1m", rentPerDay: 3, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 20 },
   { id: "cbp-small", category: "H Frame", name: "CBP", size: "Small", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 640, gracePeriodDays: 30, inventory: 40 },
+  { id: "cbp", category: "H Frame", name: "CBP", size: "", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 640, gracePeriodDays: 30, inventory: 50 },
   { id: "planks", category: "H Frame", name: "Planks", size: "", rentPerDay: 5, loadingCharge: 4, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 365 },
   { id: "base-wheels", category: "H Frame", name: "Base Wheels", size: "", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 33 },
   { id: "base-jack", category: "H Frame", name: "Base Jack", size: "", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 1218 },
