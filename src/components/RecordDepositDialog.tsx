@@ -27,7 +27,6 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [paymentDetails, setPaymentDetails] = useState(""); // For any payment reference
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [depositDate, setDepositDate] = useState(new Date().toISOString().split("T")[0]);
-  const [depositTime, setDepositTime] = useState(new Date().toTimeString().slice(0, 5));
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +73,7 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
     }
 
     const finalPaymentMethod = paymentMethod === "Other" ? customPaymentMethod : paymentMethod;
-    const depositDateTime = new Date(`${depositDate}T${depositTime}`).toISOString();
+    const depositDateTime = new Date(depositDate).toISOString();
 
     setSubmitting(true);
     try {
@@ -96,7 +95,6 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
       setCustomPaymentMethod("");
       setPaymentDetails("");
       setDepositDate(new Date().toISOString().split("T")[0]);
-      setDepositTime(new Date().toTimeString().slice(0, 5));
       onSuccess();
       onOpenChange(false);
     } catch (error) {
@@ -188,12 +186,17 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
             <Label htmlFor="amount">Deposit Amount (₹)</Label>
             <Input
               id="amount"
-              type="number"
+              type="text"
+              inputMode="decimal"
               placeholder="Enter amount"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              min="0"
-              step="0.01"
+              onChange={(e) => {
+                const value = e.target.value;
+                // Only allow numbers and decimal point
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setAmount(value);
+                }
+              }}
             />
           </div>
 
@@ -235,25 +238,14 @@ const RecordDepositDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="depositDate">Deposit Date</Label>
-              <Input
-                id="depositDate"
-                type="date"
-                value={depositDate}
-                onChange={(e) => setDepositDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="depositTime">Deposit Time</Label>
-              <Input
-                id="depositTime"
-                type="time"
-                value={depositTime}
-                onChange={(e) => setDepositTime(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="depositDate">Deposit Date</Label>
+            <Input
+              id="depositDate"
+              type="date"
+              value={depositDate}
+              onChange={(e) => setDepositDate(e.target.value)}
+            />
           </div>
 
           <div className="flex justify-end gap-2">

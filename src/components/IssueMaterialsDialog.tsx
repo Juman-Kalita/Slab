@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock, getCustomers, getInventory } from "@/lib/rental-store";
+import { getCurrentUser } from "@/lib/auth-service";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -53,6 +54,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
   // Client details (for new customers)
   const [registrationName, setRegistrationName] = useState("");
   const [contactNo, setContactNo] = useState("");
+  const [spareContactNo, setSpareContactNo] = useState("");
   const [aadharPhoto, setAadharPhoto] = useState<string>("");
   const [address, setAddress] = useState("");
   const [referral, setReferral] = useState("");
@@ -219,6 +221,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             {
               registrationName: registrationName || undefined,
               contactNo: contactNo || undefined,
+              spareContactNo: spareContactNo || undefined,
               aadharPhoto: aadharPhoto || undefined,
               address: address || undefined,
               referral: referral || undefined,
@@ -227,7 +230,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               vehicleNo: site.vehicleNo || undefined,
               challanNo: site.challanNo || undefined,
             },
-            material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined
+            material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined,
+            getCurrentUser()?.id
           );
           
           if (success) {
@@ -248,6 +252,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       setCustomerName("");
       setRegistrationName("");
       setContactNo("");
+      setSpareContactNo("");
       setAadharPhoto("");
       setAddress("");
       setReferral("");
@@ -340,6 +345,28 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                   required
                 />
                 {contactNo && contactNo.length !== 10 && (
+                  <p className="text-xs text-red-600">Phone number must be exactly 10 digits</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="spareContactNo">Spare Contact Number (Optional)</Label>
+                <Input
+                  id="spareContactNo"
+                  placeholder="10-digit phone number"
+                  value={spareContactNo}
+                  onChange={(e) => {
+                    // Only allow numbers
+                    const value = e.target.value.replace(/\D/g, '');
+                    // Limit to 10 digits
+                    if (value.length <= 10) {
+                      setSpareContactNo(value);
+                    }
+                  }}
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                />
+                {spareContactNo && spareContactNo.length !== 10 && spareContactNo.length > 0 && (
                   <p className="text-xs text-red-600">Phone number must be exactly 10 digits</p>
                 )}
               </div>
@@ -460,11 +487,16 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                         <Label htmlFor={`transportationCharge-${site.id}`} className="text-xs">Transportation Charge (₹)</Label>
                         <Input
                           id={`transportationCharge-${site.id}`}
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           placeholder="Enter transportation charge"
                           value={site.transportationCharge || ''}
-                          onChange={(e) => updateSiteLine(site.id, 'transportationCharge', e.target.value)}
-                          min="0"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                              updateSiteLine(site.id, 'transportationCharge', value);
+                            }
+                          }}
                         />
                         <p className="text-xs text-muted-foreground">
                           Additional charge for transportation/delivery
@@ -544,12 +576,16 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                                   <div className="space-y-1">
                                     <Label className="text-xs">Quantity</Label>
                                     <Input
-                                      type="number"
+                                      type="text"
+                                      inputMode="numeric"
                                       placeholder="e.g. 10"
                                       value={material.quantity}
-                                      onChange={(e) => updateMaterialLine(site.id, material.id, "quantity", e.target.value)}
-                                      min="1"
-                                      max={availableStock}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        if (value === '' || /^\d+$/.test(value)) {
+                                          updateMaterialLine(site.id, material.id, "quantity", value);
+                                        }
+                                      }}
                                       className="h-9"
                                     />
                                     {selectedMaterial && (
@@ -595,11 +631,16 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                                     </Label>
                                     <Input
                                       id={`customLoadingCharge-${material.id}`}
-                                      type="number"
+                                      type="text"
+                                      inputMode="decimal"
                                       placeholder={selectedMaterial ? `Default: ₹${selectedMaterial.loadingCharge * parseInt(material.quantity || "0")}` : "Enter amount"}
                                       value={material.customLoadingCharge}
-                                      onChange={(e) => updateMaterialLine(site.id, material.id, "customLoadingCharge", e.target.value)}
-                                      min="0"
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                          updateMaterialLine(site.id, material.id, "customLoadingCharge", value);
+                                        }
+                                      }}
                                       className="h-9"
                                     />
                                     <p className="text-xs text-muted-foreground">

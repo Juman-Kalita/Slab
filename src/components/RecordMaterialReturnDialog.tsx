@@ -8,6 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getCustomers, recordReturn, getMaterialType } from "@/lib/rental-store";
+import { getCurrentUser } from "@/lib/auth-service";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -141,7 +142,8 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
           qtyReturned, 
           qtyLost, 
           line.hasOwnLabor, 
-          returnDate
+          returnDate,
+          getCurrentUser()?.id
         );
         
         if (success) {
@@ -356,24 +358,32 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
                       <div className="space-y-2">
                         <Label>Quantity Returned</Label>
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
                           placeholder="Returned"
                           value={line.quantityReturned}
-                          onChange={(e) => updateMaterialLine(line.id, 'quantityReturned', e.target.value)}
-                          min="0"
-                          max={material?.quantity || 0}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || /^\d+$/.test(value)) {
+                              updateMaterialLine(line.id, 'quantityReturned', value);
+                            }
+                          }}
                         />
                       </div>
 
                       <div className="space-y-2">
                         <Label>Quantity Lost</Label>
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
                           placeholder="Lost"
                           value={line.quantityLost}
-                          onChange={(e) => updateMaterialLine(line.id, 'quantityLost', e.target.value)}
-                          min="0"
-                          max={material?.quantity || 0}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || /^\d+$/.test(value)) {
+                              updateMaterialLine(line.id, 'quantityLost', value);
+                            }
+                          }}
                         />
                       </div>
                     </div>

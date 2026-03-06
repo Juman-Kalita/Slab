@@ -37,6 +37,7 @@ export async function createCustomerWithSite(
     name: string;
     registrationName?: string;
     contactNo?: string;
+    spareContactNo?: string;
     aadharPhoto?: string;
     address?: string;
     referral?: string;
@@ -72,6 +73,7 @@ export async function createCustomerWithSite(
       name: customerData.name,
       registrationName: customerData.registrationName,
       contactNo: customerData.contactNo,
+      spareContactNo: customerData.spareContactNo,
       aadharPhoto: customerData.aadharPhoto,
       address: customerData.address,
       referral: customerData.referral,
@@ -183,21 +185,6 @@ export async function addSiteToCustomer(
   return site.id;
 }
 
-// Update material quantity
-export async function updateMaterialQuantity(
-  siteId: string,
-  materialTypeId: string,
-  newQuantity: number
-): Promise<void> {
-  const { error } = await supabase
-    .from('materials')
-    .update({ quantity: newQuantity })
-    .eq('site_id', siteId)
-    .eq('material_type_id', materialTypeId);
-
-  if (error) throw error;
-}
-
 // Update material initial quantity
 export async function updateMaterialInitialQuantity(
   siteId: string,
@@ -267,6 +254,7 @@ export async function addHistoryEvent(
     quantityLost?: number;
     paymentMethod?: string;
     paymentScreenshot?: string;
+    employeeId?: string;
   }
 ): Promise<void> {
   const { error } = await supabase
@@ -441,3 +429,197 @@ export async function deleteCustomer(customerId: string): Promise<boolean> {
     return false;
   }
 }
+
+
+// ============================================
+// ADMIN PANEL - UPDATE FUNCTIONS
+// ============================================
+
+// Update customer basic information
+export async function updateCustomer(
+  customerId: string,
+  updates: {
+    name?: string;
+    registrationName?: string;
+    contactNo?: string;
+    spareContactNo?: string;
+    address?: string;
+    referral?: string;
+    aadharPhoto?: string;
+  }
+): Promise<boolean> {
+  try {
+    const updateData: any = {};
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.registrationName !== undefined) updateData.registration_name = updates.registrationName;
+    if (updates.contactNo !== undefined) updateData.contact_no = updates.contactNo;
+    if (updates.spareContactNo !== undefined) updateData.spare_contact_no = updates.spareContactNo;
+    if (updates.address !== undefined) updateData.address = updates.address;
+    if (updates.referral !== undefined) updateData.referral = updates.referral;
+    if (updates.aadharPhoto !== undefined) updateData.aadhar_photo = updates.aadharPhoto;
+
+    const { error } = await supabase
+      .from('customers')
+      .update(updateData)
+      .eq('id', customerId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating customer:', error);
+    return false;
+  }
+}
+
+// Update site information
+export async function updateSite(
+  siteId: string,
+  updates: {
+    siteName?: string;
+    location?: string;
+    issueDate?: string;
+  }
+): Promise<boolean> {
+  try {
+    const updateData: any = {};
+    if (updates.siteName !== undefined) updateData.site_name = updates.siteName;
+    if (updates.location !== undefined) updateData.location = updates.location;
+    if (updates.issueDate !== undefined) updateData.issue_date = updates.issueDate;
+
+    const { error } = await supabase
+      .from('sites')
+      .update(updateData)
+      .eq('id', siteId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating site:', error);
+    return false;
+  }
+}
+
+// Update material quantity for a site
+export async function updateMaterialQuantity(
+  siteId: string,
+  materialTypeId: string,
+  newQuantity: number
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('materials')
+      .update({ quantity: newQuantity })
+      .eq('site_id', siteId)
+      .eq('material_type_id', materialTypeId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating material quantity:', error);
+    return false;
+  }
+}
+
+// Delete site (and all related materials/history via cascade)
+export async function deleteSite(siteId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('sites')
+      .delete()
+      .eq('id', siteId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting site:', error);
+    return false;
+  }
+}
+
+// Update advance deposit
+export async function updateAdvanceDeposit(
+  customerId: string,
+  newAmount: number
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .update({ advance_deposit: newAmount })
+      .eq('id', customerId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating advance deposit:', error);
+    return false;
+  }
+}
+
+// Update payment record
+export async function updatePaymentRecord(
+  historyEventId: string,
+  updates: {
+    amount?: number;
+    date?: string;
+    paymentMethod?: string;
+  }
+): Promise<boolean> {
+  try {
+    const updateData: any = {};
+    if (updates.amount !== undefined) updateData.amount = updates.amount;
+    if (updates.date !== undefined) updateData.date = updates.date;
+    if (updates.paymentMethod !== undefined) updateData.payment_method = updates.paymentMethod;
+
+    const { error } = await supabase
+      .from('history_events')
+      .update(updateData)
+      .eq('id', historyEventId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating payment record:', error);
+    return false;
+  }
+}
+
+// Delete payment/history record
+export async function deleteHistoryEvent(historyEventId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('history_events')
+      .delete()
+      .eq('id', historyEventId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting history event:', error);
+    return false;
+  }
+}
+
+// Set inventory to specific amount
+export async function setInventory(
+  materialTypeId: string,
+  quantity: number
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('inventory')
+      .upsert({
+        material_type_id: materialTypeId,
+        quantity: Math.max(0, quantity)
+      }, {
+        onConflict: 'material_type_id'
+      });
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error setting inventory:', error);
+    return false;
+  }
+}
+
+

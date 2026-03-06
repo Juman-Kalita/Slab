@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getCustomers, recordPayment, calculateSiteRent, type Customer } from "@/lib/rental-store";
+import { getCurrentUser } from "@/lib/auth-service";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,6 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [paymentDetails, setPaymentDetails] = useState(""); // For any payment reference
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
-  const [paymentTime, setPaymentTime] = useState(new Date().toTimeString().slice(0, 5));
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -87,14 +87,15 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
       return;
     }
 
+
     const finalPaymentMethod = paymentMethod === "Other" ? customPaymentMethod : paymentMethod;
 
-    // Combine date and time into ISO string
-    const paymentDateTime = new Date(`${paymentDate}T${paymentTime}`).toISOString();
+    // Use payment date at start of day
+    const paymentDateTime = new Date(paymentDate).toISOString();
 
     setSubmitting(true);
     try {
-      const success = await recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime);
+      const success = await recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime, undefined, getCurrentUser()?.id);
       if (success) {
         toast.success("Payment recorded successfully!");
         
@@ -105,7 +106,6 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
         setCustomPaymentMethod("");
         setPaymentDetails("");
         setPaymentDate(new Date().toISOString().split("T")[0]);
-        setPaymentTime(new Date().toTimeString().slice(0, 5));
         onSuccess();
         onOpenChange(false);
       } else {
@@ -267,12 +267,17 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
             <Label htmlFor="amount">Amount Received (₹)</Label>
             <Input
               id="amount"
-              type="number"
+              type="text"
+              inputMode="decimal"
               placeholder="Enter amount"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              min="0"
-              step="0.01"
+              onChange={(e) => {
+                const value = e.target.value;
+                // Only allow numbers and decimal point
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setAmount(value);
+                }
+              }}
             />
             {amount && calculatedRent && parseFloat(amount) > calculatedRent.remainingDue && (
               <p className="text-xs text-green-600 font-medium">
@@ -319,25 +324,14 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="paymentDate">Payment Date</Label>
-              <Input
-                id="paymentDate"
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="paymentTime">Payment Time</Label>
-              <Input
-                id="paymentTime"
-                type="time"
-                value={paymentTime}
-                onChange={(e) => setPaymentTime(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="paymentDate">Payment Date</Label>
+            <Input
+              id="paymentDate"
+              type="date"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+            />
           </div>
 
           <div className="flex justify-end gap-2">

@@ -114,6 +114,7 @@ export interface HistoryEvent {
   quantityLost?: number;
   paymentMethod?: string; // Payment method used (Father, Mother, Own, Cash, or custom)
   paymentScreenshot?: string; // Base64 encoded screenshot for UPI/Bank Transfer
+  employeeId?: string; // ID of employee who performed this action
 }
 
 export interface Site {
@@ -136,6 +137,7 @@ export interface Customer {
   name: string;
   registrationName?: string; // Official registration name
   contactNo?: string; // Contact number
+  spareContactNo?: string; // Spare contact number
   aadharPhoto?: string; // Base64 encoded Aadhar photo
   address?: string; // Address
   referral?: string; // Referral source (who referred this customer)
@@ -204,6 +206,7 @@ export async function issueMaterials(
   clientDetails?: {
     registrationName?: string;
     contactNo?: string;
+    spareContactNo?: string;
     aadharPhoto?: string;
     address?: string;
     referral?: string;
@@ -212,7 +215,8 @@ export async function issueMaterials(
     vehicleNo?: string;
     challanNo?: string;
   },
-  customLoadingCharge?: number
+  customLoadingCharge?: number,
+  employeeId?: string
 ): Promise<boolean> {
   try {
     // Check if enough inventory available
@@ -298,7 +302,8 @@ export async function issueMaterials(
           action: "Issued",
           materialTypeId,
           quantity,
-          hasOwnLabor
+          hasOwnLabor,
+          employeeId
         });
 
         // Auto-apply customer advance deposit to this site
@@ -319,7 +324,8 @@ export async function issueMaterials(
               date: issueDate,
               action: "Payment",
               amount: amountToApply,
-              paymentMethod: "Advance Deposit"
+              paymentMethod: "Advance Deposit",
+              employeeId
             });
           }
         }
@@ -336,7 +342,8 @@ export async function issueMaterials(
               date: issueDate,
               action: "Payment",
               amount: depositAmount,
-              paymentMethod: "Cash"
+              paymentMethod: "Cash",
+              employeeId
             });
           }
         }
@@ -351,7 +358,8 @@ export async function issueMaterials(
             action: "Issued" as const,
             materialTypeId,
             quantity,
-            hasOwnLabor
+            hasOwnLabor,
+            employeeId
           }
         ];
 
@@ -371,7 +379,8 @@ export async function issueMaterials(
             date: issueDate,
             action: "Payment" as const,
             amount: amountToApply,
-            paymentMethod: "Advance Deposit"
+            paymentMethod: "Advance Deposit",
+            employeeId
           });
         }
 
@@ -382,7 +391,8 @@ export async function issueMaterials(
             date: issueDate,
             action: "Payment" as const,
             amount: depositAmount,
-            paymentMethod: "Cash"
+            paymentMethod: "Cash",
+            employeeId
           });
         }
 
@@ -417,7 +427,8 @@ export async function issueMaterials(
           action: "Issued" as const,
           materialTypeId,
           quantity,
-          hasOwnLabor
+          hasOwnLabor,
+          employeeId
         }
       ];
 
@@ -426,7 +437,8 @@ export async function issueMaterials(
           date: issueDate,
           action: "Payment" as const,
           amount: depositAmount,
-          paymentMethod: "Cash"
+          paymentMethod: "Cash",
+          employeeId
         });
       }
 
@@ -485,7 +497,8 @@ export async function recordReturn(
   quantityReturned: number,
   quantityLost: number,
   hasOwnLabor: boolean,
-  returnDate?: string
+  returnDate?: string,
+  employeeId?: string
 ): Promise<boolean> {
   try {
     const customers = await getCustomers();
@@ -509,7 +522,8 @@ export async function recordReturn(
       materialTypeId,
       quantity: quantityReturned,
       quantityLost,
-      hasOwnLabor
+      hasOwnLabor,
+      employeeId
     });
 
     // Update inventory (add back returned quantity, but not lost items)
@@ -682,7 +696,7 @@ export function calculateRent(customer: Customer): {
 }
 
 // Record payment
-export async function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string, paymentScreenshot?: string): Promise<boolean> {
+export async function recordPayment(customerId: string, siteId: string, amount: number, paymentMethod?: string, paymentDate?: string, paymentScreenshot?: string, employeeId?: string): Promise<boolean> {
   try {
     const customers = await getCustomers();
     const customer = customers.find((c) => c.id === customerId);
@@ -714,7 +728,8 @@ export async function recordPayment(customerId: string, siteId: string, amount: 
         date: recordDate,
         action: "Payment",
         amount: usedAdvance,
-        paymentMethod: "Advance Deposit"
+        paymentMethod: "Advance Deposit",
+        employeeId
       });
     }
 
@@ -735,7 +750,8 @@ export async function recordPayment(customerId: string, siteId: string, amount: 
           action: "Payment",
           amount: amountForSite,
           paymentMethod: paymentMethod || "Cash",
-          paymentScreenshot: paymentScreenshot
+          paymentScreenshot: paymentScreenshot,
+          employeeId
         });
       }
     }

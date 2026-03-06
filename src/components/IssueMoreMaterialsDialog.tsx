@@ -166,11 +166,16 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
             <Label htmlFor="transportationCharge">Transportation Charge (₹) - Optional</Label>
             <Input
               id="transportationCharge"
-              type="number"
+              type="text"
+              inputMode="decimal"
               placeholder="Enter transportation charge"
               value={transportationCharge}
-              onChange={(e) => setTransportationCharge(e.target.value)}
-              min="0"
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setTransportationCharge(value);
+                }
+              }}
             />
             <p className="text-xs text-muted-foreground">
               Additional charge for transportation/delivery
@@ -242,12 +247,16 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
                         <div className="space-y-2">
                           <Label>Quantity</Label>
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             placeholder="e.g. 10"
                             value={line.quantity}
-                            onChange={(e) => updateMaterialLine(line.id, "quantity", e.target.value)}
-                            min="1"
-                            max={availableStock}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || /^\d+$/.test(value)) {
+                                updateMaterialLine(line.id, "quantity", value);
+                              }
+                            }}
                           />
                           {selectedMaterial && (
                             <p className="text-xs text-muted-foreground">
@@ -292,11 +301,16 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
                           </Label>
                           <Input
                             id={`customLoadingCharge-${line.id}`}
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             placeholder={selectedMaterial ? `Default: ₹${selectedMaterial.loadingCharge * parseInt(line.quantity || "0")}` : "Enter amount"}
                             value={line.customLoadingCharge}
-                            onChange={(e) => updateMaterialLine(line.id, "customLoadingCharge", e.target.value)}
-                            min="0"
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                updateMaterialLine(line.id, "customLoadingCharge", value);
+                              }
+                            }}
                           />
                           <p className="text-xs text-muted-foreground">
                             Leave empty to use default LC&ULC

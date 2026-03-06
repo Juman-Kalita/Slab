@@ -8,6 +8,7 @@ export function dbToCustomer(dbCustomer: any): Customer {
     name: dbCustomer.name,
     registrationName: dbCustomer.registration_name,
     contactNo: dbCustomer.contact_no,
+    spareContactNo: dbCustomer.spare_contact_no,
     aadharPhoto: dbCustomer.aadhar_photo,
     address: dbCustomer.address,
     referral: dbCustomer.referral,
@@ -53,7 +54,8 @@ export function dbToHistoryEvent(dbEvent: any): HistoryEvent {
     hasOwnLabor: dbEvent.has_own_labor,
     quantityLost: dbEvent.quantity_lost,
     paymentMethod: dbEvent.payment_method,
-    paymentScreenshot: dbEvent.payment_screenshot
+    paymentScreenshot: dbEvent.payment_screenshot,
+    employeeId: dbEvent.employee_id
   };
 }
 
@@ -65,6 +67,7 @@ export function customerToDb(customer: Partial<Customer>): any {
     name: customer.name,
     registration_name: customer.registrationName,
     contact_no: customer.contactNo,
+    spare_contact_no: customer.spareContactNo,
     aadhar_photo: customer.aadharPhoto,
     address: customer.address,
     referral: customer.referral,
@@ -109,6 +112,7 @@ export function historyEventToDb(event: Partial<HistoryEvent>, siteId: string): 
     has_own_labor: event.hasOwnLabor,
     quantity_lost: event.quantityLost,
     payment_method: event.paymentMethod,
-    payment_screenshot: event.paymentScreenshot
+    payment_screenshot: event.paymentScreenshot,
+    employee_id: event.employeeId
   };
 }
