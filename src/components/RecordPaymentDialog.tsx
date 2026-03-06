@@ -24,11 +24,10 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [customPaymentMethod, setCustomPaymentMethod] = useState("");
-  const [paymentDetails, setPaymentDetails] = useState(""); // For UPI ID, Transaction ID, Cheque No, etc.
+  const [paymentDetails, setPaymentDetails] = useState(""); // For any payment reference
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentTime, setPaymentTime] = useState(new Date().toTimeString().slice(0, 5));
-  const [paymentScreenshot, setPaymentScreenshot] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,7 +94,7 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
 
     setSubmitting(true);
     try {
-      const success = await recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime, paymentScreenshot);
+      const success = await recordPayment(effectiveCustomerId, selectedSiteId, amountNum, finalPaymentMethod, paymentDateTime);
       if (success) {
         toast.success("Payment recorded successfully!");
         
@@ -105,7 +104,6 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
         setPaymentMethod("Cash");
         setCustomPaymentMethod("");
         setPaymentDetails("");
-        setPaymentScreenshot("");
         setPaymentDate(new Date().toISOString().split("T")[0]);
         setPaymentTime(new Date().toTimeString().slice(0, 5));
         onSuccess();
@@ -311,56 +309,15 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
             </div>
           )}
 
-          {(paymentMethod === "UPI" || paymentMethod === "Bank Transfer" || paymentMethod === "Cheque") && (
-            <div className="space-y-2">
-              <Label htmlFor="paymentDetails">
-                {paymentMethod === "UPI" && "UPI Transaction ID / UPI ID"}
-                {paymentMethod === "Bank Transfer" && "Transaction ID / Reference Number"}
-                {paymentMethod === "Cheque" && "Cheque Number"}
-              </Label>
-              <Input
-                id="paymentDetails"
-                placeholder={
-                  paymentMethod === "UPI" ? "Enter UPI ID or Transaction ID" :
-                  paymentMethod === "Bank Transfer" ? "Enter transaction reference" :
-                  "Enter cheque number"
-                }
-                value={paymentDetails}
-                onChange={(e) => setPaymentDetails(e.target.value)}
-              />
-            </div>
-          )}
-
-          {(paymentMethod === "UPI" || paymentMethod === "Bank Transfer") && (
-            <div className="space-y-2">
-              <Label htmlFor="paymentScreenshot">Payment Screenshot</Label>
-              <Input
-                id="paymentScreenshot"
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (file.size > 2 * 1024 * 1024) {
-                      toast.error("File size should be less than 2MB");
-                      return;
-                    }
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      setPaymentScreenshot(reader.result as string);
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-                className="cursor-pointer"
-              />
-              {paymentScreenshot && (
-                <div className="mt-2">
-                  <img src={paymentScreenshot} alt="Payment screenshot preview" className="max-w-xs rounded border" />
-                </div>
-              )}
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="paymentDetails">Payment Details (Optional)</Label>
+            <Input
+              id="paymentDetails"
+              placeholder="Enter transaction ID, cheque number, or any reference"
+              value={paymentDetails}
+              onChange={(e) => setPaymentDetails(e.target.value)}
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
