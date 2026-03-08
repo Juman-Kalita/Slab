@@ -35,6 +35,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
     { id: crypto.randomUUID(), materialTypeId: "", quantityReturned: "", quantityLost: "0", hasOwnLabor: false }
   ]);
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
+  const [transportCharges, setTransportCharges] = useState("");
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -129,11 +130,15 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
       let successCount = 0;
       let totalReturned = 0;
       let totalLost = 0;
+      const transportChargesValue = parseFloat(transportCharges) || 0;
 
       // Process each material line
       for (const line of validLines) {
         const qtyReturned = parseInt(line.quantityReturned) || 0;
         const qtyLost = parseInt(line.quantityLost) || 0;
+        
+        // Only add transport charges to the first material line to avoid duplication
+        const chargesForThisLine = successCount === 0 ? transportChargesValue : undefined;
         
         const success = await recordReturn(
           effectiveCustomerId, 
@@ -143,7 +148,8 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
           qtyLost, 
           line.hasOwnLabor, 
           returnDate,
-          getCurrentUser()?.id
+          getCurrentUser()?.id,
+          chargesForThisLine
         );
         
         if (success) {
@@ -155,13 +161,15 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
 
       if (successCount > 0) {
         const lostMessage = totalLost > 0 ? ` (${totalLost} lost)` : "";
-        toast.success(`Successfully recorded return of ${totalReturned} items${lostMessage} across ${successCount} material type(s)`);
+        const transportMessage = transportChargesValue > 0 ? ` (Transport: ₹${transportChargesValue})` : "";
+        toast.success(`Successfully recorded return of ${totalReturned} items${lostMessage}${transportMessage} across ${successCount} material type(s)`);
         
         // Reset form
         setSelectedCustomerId("");
         setSelectedSiteId("");
         setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantityReturned: "", quantityLost: "0", hasOwnLabor: false }]);
         setReturnDate(new Date().toISOString().split("T")[0]);
+        setTransportCharges("");
         onSuccess();
         onOpenChange(false);
       } else {
@@ -275,6 +283,26 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
             />
             <p className="text-xs text-muted-foreground">
               Select the actual date materials were returned
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="transportCharges">Transportation Charges (Optional)</Label>
+            <Input
+              id="transportCharges"
+              type="text"
+              inputMode="decimal"
+              placeholder="Enter amount in ₹"
+              value={transportCharges}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setTransportCharges(value);
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Additional transportation charges for this return
             </p>
           </div>
 

@@ -29,7 +29,11 @@ export function dbToSite(dbSite: any): Site {
     lastSettlementDate: dbSite.last_settlement_date,
     originalRentCharge: parseFloat(dbSite.original_rent_charge || 0),
     originalIssueLC: parseFloat(dbSite.original_issue_lc || 0),
-    history: dbSite.history_events?.map(dbToHistoryEvent) || []
+    history: dbSite.history_events?.map(dbToHistoryEvent) || [],
+    vehicleNo: dbSite.vehicle_no,
+    challanNo: dbSite.challan_no,
+    totalDueOverride: dbSite.total_due_override ? parseFloat(dbSite.total_due_override) : undefined,
+    useOverride: dbSite.use_override || false
   };
 }
 
@@ -45,6 +49,7 @@ export function dbToMaterial(dbMaterial: any): MaterialItem {
 
 export function dbToHistoryEvent(dbEvent: any): HistoryEvent {
   return {
+    id: dbEvent.id,
     date: dbEvent.date,
     action: dbEvent.action,
     siteId: dbEvent.site_id,

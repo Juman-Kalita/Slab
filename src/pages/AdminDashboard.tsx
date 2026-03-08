@@ -47,6 +47,7 @@ import MaterialTypeEditor from "@/components/admin/MaterialTypeEditor";
 import PaymentManagement from "@/components/admin/PaymentManagement";
 import ActivityLog from "@/components/admin/ActivityLog";
 import AdminSettings from "@/components/admin/AdminSettings";
+import FinancialAdjustmentDialog from "@/components/admin/FinancialAdjustmentDialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -256,124 +257,533 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
-
-              <div className="space-y-4">
-                {customer.sites.map((site) => {
-                  const siteCalc = calculateSiteRent(site);
-                  const totalItems = site.materials.reduce((sum, m) => sum + m.quantity, 0);
-                  
-                  return (
-                    <Card key={site.id} className="border-2">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h3 className="font-bold text-lg">{site.siteName}</h3>
-                            <p className="text-sm text-muted-foreground">{site.location}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Issued: {format(new Date(site.issueDate), "dd MMM yyyy")}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedSite({ siteName: site.siteName, location: site.location });
-                                setIssueMoreOpen(true);
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" /> Add Materials
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDownloadInvoice(customer, site.id)}
-                            >
-                              <Download className="h-4 w-4 mr-1" /> Invoice
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                          <div className="bg-muted rounded-lg p-3">
-                            <p className="text-muted-foreground text-xs">Items Held</p>
-                            <p className="font-bold text-lg">{totalItems}</p>
-                          </div>
-                          <div className="bg-muted rounded-lg p-3">
-                            <p className="text-muted-foreground text-xs">Total Due</p>
-                            <p className="font-bold text-lg">₹{siteCalc.totalRequired.toLocaleString("en-IN")}</p>
-                          </div>
-                          <div className="bg-muted rounded-lg p-3">
-                            <p className="text-muted-foreground text-xs">Paid</p>
-                            <p className="font-bold text-lg text-green-600">₹{site.amountPaid.toLocaleString("en-IN")}</p>
-                          </div>
-                          <div className="bg-muted rounded-lg p-3">
-                            <p className="text-muted-foreground text-xs">Remaining</p>
-                            <p className="font-bold text-lg text-red-600">₹{siteCalc.remainingDue.toLocaleString("en-IN")}</p>
-                          </div>
-                        </div>
-
-                        {site.materials.length > 0 && (
-                          <div className="border rounded-lg p-3 space-y-2">
-                            <p className="text-sm font-semibold">Materials:</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                              {site.materials.map((m) => {
-                                const mt = getMaterialType(m.materialTypeId);
-                                return mt ? (
-                                  <div key={m.materialTypeId} className="flex justify-between items-center bg-muted/50 rounded px-3 py-2">
-                                    <span>{mt.name} {mt.size && `(${mt.size})`}</span>
-                                    <span className="font-semibold">{m.quantity} items</span>
-                                  </div>
-                                ) : null;
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+              
+              {/* Client Details Section */}
+              {(customer.registrationName || customer.contactNo || customer.address || customer.referral || customer.aadharPhoto) && (
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+                  <h3 className="font-semibold text-sm text-primary">Client Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    {customer.registrationName && (
+                      <div>
+                        <span className="text-muted-foreground">Registration Name:</span><br />
+                        <span className="font-medium">{customer.registrationName}</span>
+                      </div>
+                    )}
+                    {customer.contactNo && (
+                      <div>
+                        <span className="text-muted-foreground">Contact Number:</span><br />
+                        <span className="font-medium">{customer.contactNo}</span>
+                      </div>
+                    )}
+                    {customer.address && (
+                      <div className="md:col-span-2">
+                        <span className="text-muted-foreground">Address:</span><br />
+                        <span className="font-medium">{customer.address}</span>
+                      </div>
+                    )}
+                    {customer.referral && (
+                      <div>
+                        <span className="text-muted-foreground">Referral:</span><br />
+                        <span className="font-medium">{customer.referral}</span>
+                      </div>
+                    )}
+                  </div>
+                  {customer.aadharPhoto && (
+                    <div className="pt-2 border-t">
+                      <span className="text-muted-foreground text-sm">Aadhar Photo:</span>
+                      <div className="mt-2">
+                        <img 
+                          src={customer.aadharPhoto} 
+                          alt="Aadhar" 
+                          className="max-w-sm rounded border cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(customer.aadharPhoto, '_blank')}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* Overall Summary Boxes - ALL SITES */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Total Issued Across All Sites */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="border-2 rounded-xl p-4 bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:shadow-lg transition-all hover:scale-105">
+                  <div className="text-xs text-blue-700 dark:text-blue-400 font-semibold uppercase tracking-wide mb-2">
+                    Total Issued
+                  </div>
+                  <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+                    {customer.sites.reduce((total, site) => {
+                      return total + site.history
+                        .filter(h => h.action === "Issued")
+                        .reduce((sum, h) => sum + (h.quantity || 0), 0);
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-1">
+                    items • Click for details
+                  </div>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-96">
+                <div className="space-y-3">
+                  <h4 className="font-semibold">All Issued Materials</h4>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {customer.sites.map((site) => {
+                      const siteIssued = site.history.filter(h => h.action === "Issued" && h.materialTypeId && h.quantity);
+                      if (siteIssued.length === 0) return null;
+                      
+                      return (
+                        <div key={site.id} className="border-b pb-3">
+                          <div className="font-semibold text-sm mb-2 text-primary">{site.siteName} ({site.location})</div>
+                          <div className="space-y-1">
+                            {siteIssued.map((h, idx) => {
+                              const mt = getMaterialType(h.materialTypeId!);
+                              return (
+                                <div key={idx} className="flex justify-between items-center text-sm pl-3">
+                                  <div>
+                                    <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {format(new Date(h.date), "dd MMM yyyy")}
+                                    </div>
+                                  </div>
+                                  <div className="font-semibold text-blue-600">{h.quantity}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t pt-2 flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-blue-600">
+                      {customer.sites.reduce((total, site) => {
+                        return total + site.history
+                          .filter(h => h.action === "Issued")
+                          .reduce((sum, h) => sum + (h.quantity || 0), 0);
+                      }, 0)} items
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Total Returned Across All Sites - Interactive */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="border-2 rounded-xl p-4 bg-green-50 dark:bg-green-900/20 cursor-pointer hover:shadow-md transition-shadow">
+                  <div className="text-xs text-green-700 dark:text-green-400 font-semibold uppercase tracking-wide mb-2">
+                    Total Returned
+                  </div>
+                  <div className="text-4xl font-bold text-green-600 dark:text-green-400">
+                    {customer.sites.reduce((total, site) => {
+                      return total + site.history
+                        .filter(h => h.action === "Returned")
+                        .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-green-600/70 dark:text-green-400/70 mt-1">
+                    items • Click for details
+                  </div>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-96 max-h-96 overflow-y-auto" align="start">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm">All Returned Materials</h4>
+                  {customer.sites.map((site) => {
+                    const returnedItems = site.history.filter(h => h.action === "Returned");
+                    if (returnedItems.length === 0) return null;
+                    
+                    return (
+                      <div key={site.id} className="space-y-2">
+                        <div className="font-medium text-sm text-muted-foreground">{site.siteName} ({site.location})</div>
+                        <div className="space-y-1">
+                          {returnedItems.map((h, idx) => {
+                            const mt = getMaterialType(h.materialTypeId!);
+                            const totalQty = (h.quantity || 0) + (h.quantityLost || 0);
+                            return (
+                              <div key={idx} className="flex justify-between items-center text-sm pl-3">
+                                <div>
+                                  <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {format(new Date(h.date), "dd MMM yyyy")}
+                                    {h.quantityLost && h.quantityLost > 0 && (
+                                      <span className="text-red-600 ml-2">• {h.quantityLost} lost</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="font-semibold text-green-600">{totalQty}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="border-t pt-2 flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-green-600">
+                      {customer.sites.reduce((total, site) => {
+                        return total + site.history
+                          .filter(h => h.action === "Returned")
+                          .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+                      }, 0)} items
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Currently Held Across All Sites - Interactive */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="border-2 rounded-xl p-4 bg-orange-50 dark:bg-orange-900/20 cursor-pointer hover:shadow-md transition-shadow">
+                  <div className="text-xs text-orange-700 dark:text-orange-400 font-semibold uppercase tracking-wide mb-2">
+                    Currently Held
+                  </div>
+                  <div className="text-4xl font-bold text-orange-600 dark:text-orange-400">
+                    {customer.sites.reduce((total, site) => {
+                      return total + site.materials.reduce((sum, m) => sum + m.quantity, 0);
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-1">
+                    items • Click for details
+                  </div>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-96 max-h-96 overflow-y-auto" align="start">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm">Currently Held Materials</h4>
+                  {customer.sites.map((site) => {
+                    const heldMaterials = site.materials.filter(m => m.quantity > 0);
+                    if (heldMaterials.length === 0) return null;
+                    
+                    return (
+                      <div key={site.id} className="space-y-2">
+                        <div className="font-medium text-sm text-muted-foreground">{site.siteName} ({site.location})</div>
+                        <div className="space-y-1">
+                          {heldMaterials.map((m) => {
+                            const mt = getMaterialType(m.materialTypeId);
+                            return (
+                              <div key={m.materialTypeId} className="flex justify-between items-center text-sm pl-3">
+                                <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                <div className="font-semibold text-orange-600">{m.quantity}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="border-t pt-2 flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-orange-600">
+                      {customer.sites.reduce((total, site) => {
+                        return total + site.materials.reduce((sum, m) => sum + m.quantity, 0);
+                      }, 0)} items
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Sites List */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Sites ({customer.sites.length})</h3>
+            {customer.sites.map((site) => {
+              const totalItems = site.materials.reduce((sum, m) => sum + m.quantity, 0);
+              const siteCalc = calculateSiteRent(site);
+              
+              // Calculate total items issued and returned from history
+              const totalIssued = site.history
+                .filter(h => h.action === "Issued")
+                .reduce((sum, h) => sum + (h.quantity || 0), 0);
+              
+              const totalReturned = site.history
+                .filter(h => h.action === "Returned")
+                .reduce((sum, h) => sum + (h.quantity || 0) + (h.quantityLost || 0), 0);
+              
+              return (
+                <Card key={site.id}>
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-xl font-bold">{site.siteName}</h4>
+                        <p className="text-sm text-muted-foreground">{site.location}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedSite({ siteName: site.siteName, location: site.location });
+                            setIssueMoreOpen(true);
+                          }}
+                          className="gap-1 bg-accent/10 hover:bg-accent/20"
+                        >
+                          <Plus className="h-4 w-4" /> Issue More
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadInvoice(customer, site.id)}
+                          className="gap-1"
+                        >
+                          <Download className="h-4 w-4" /> Invoice
+                        </Button>
+                        <div className="text-right">
+                          <div className="text-sm text-muted-foreground">Issue Date</div>
+                          <div className="font-medium">{format(new Date(site.issueDate), "dd MMM yyyy")}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Items Summary - MOVED TO TOP */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Total Issued with Details */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:shadow-md transition-shadow">
+                            <div className="text-xs text-muted-foreground mb-1">Total Issued</div>
+                            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalIssued}</div>
+                            <div className="text-xs text-muted-foreground">items • Click for details</div>
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="space-y-3">
+                            <h4 className="font-semibold text-sm">Issued Materials Breakdown</h4>
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {site.history
+                                .filter(h => h.action === "Issued" && h.materialTypeId && h.quantity)
+                                .map((h, idx) => {
+                                  const mt = getMaterialType(h.materialTypeId!);
+                                  return (
+                                    <div key={idx} className="flex justify-between items-center text-sm border-b pb-2">
+                                      <div>
+                                        <div className="font-medium">{mt?.name} {mt?.size && `(${mt.size})`}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {format(new Date(h.date), "dd MMM yyyy")}
+                                        </div>
+                                      </div>
+                                      <div className="font-semibold text-blue-600">{h.quantity} items</div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                            <div className="border-t pt-2 flex justify-between font-bold">
+                              <span>Total:</span>
+                              <span className="text-blue-600">{totalIssued} items</span>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Total Returned */}
+                      <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Total Returned</div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalReturned}</div>
+                        <div className="text-xs text-muted-foreground">items</div>
+                      </div>
+
+                      {/* Currently Held */}
+                      <div className="border rounded-lg p-3 bg-orange-50 dark:bg-orange-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Currently Held</div>
+                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{totalItems}</div>
+                        <div className="text-xs text-muted-foreground">items</div>
+                      </div>
+                    </div>
+
+                    {/* Shipping Details */}
+                    {(site.vehicleNo || site.challanNo) && (
+                      <div className="border rounded-lg p-3 bg-amber-50 dark:bg-amber-900/20">
+                        <div className="text-xs text-muted-foreground mb-1">Shipping Details:</div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          {site.vehicleNo && (
+                            <div>
+                              <span className="text-muted-foreground">Vehicle:</span>
+                              <span className="ml-2 font-medium">{site.vehicleNo}</span>
+                            </div>
+                          )}
+                          {site.challanNo && (
+                            <div>
+                              <span className="text-muted-foreground">Challan:</span>
+                              <span className="ml-2 font-medium">{site.challanNo}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Financial Summary */}
+                    <div className="border rounded-lg p-4 bg-muted/20 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Rent Amount:</span>
+                        <span className="font-semibold">₹{siteCalc.rentAmount.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Loading Charges:</span>
+                        <span className="font-semibold">₹{(siteCalc.issueLoadingCharges + siteCalc.returnLoadingCharges).toLocaleString("en-IN")}</span>
+                      </div>
+                      {siteCalc.penaltyAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Late Penalty:</span>
+                          <span className="font-semibold text-red-600">₹{siteCalc.penaltyAmount.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      {siteCalc.lostItemsPenalty > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Lost Items:</span>
+                          <span className="font-semibold text-red-600">₹{siteCalc.lostItemsPenalty.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-2 border-t">
+                        <span className="font-medium">Amount Deposited:</span>
+                        <span className="font-semibold text-green-600">₹{site.amountPaid.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t">
+                        <span className="font-medium">Remaining Due:</span>
+                        <span className="font-bold text-lg text-accent">₹{siteCalc.remainingDue.toLocaleString("en-IN")}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment Methods Used */}
+                    {(() => {
+                      const paymentEvents = site.history.filter(h => h.action === "Payment" && h.paymentMethod);
+                      if (paymentEvents.length > 0) {
+                        const paymentMethods = Array.from(new Set(paymentEvents.map(p => p.paymentMethod)));
+                        return (
+                          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20">
+                            <div className="text-xs text-muted-foreground mb-1">Payment Methods Used:</div>
+                            <div className="flex flex-wrap gap-2">
+                              {paymentMethods.map((method, idx) => (
+                                <span key={idx} className="inline-flex items-center px-2 py-1 rounded-md bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                                  {method}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Payment History */}
+                    {(() => {
+                      const paymentEvents = site.history.filter(h => h.action === "Payment" && h.amount);
+                      if (paymentEvents.length > 0) {
+                        return (
+                          <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/20">
+                            <h5 className="font-semibold mb-3 text-sm">Payment History</h5>
+                            <div className="space-y-2">
+                              {paymentEvents.map((payment, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded border">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium">₹{payment.amount?.toLocaleString("en-IN")}</span>
+                                      {payment.paymentMethod && (
+                                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                                          {payment.paymentMethod}
+                                        </span>
+                                      )}
+                                      {payment.paymentScreenshot && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={() => window.open(payment.paymentScreenshot, '_blank')}
+                                        >
+                                          View Screenshot
+                                        </Button>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {format(new Date(payment.date), "dd MMM yyyy, hh:mm a")}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Materials at this site */}
+                    {site.materials.filter(m => m.quantity > 0).length > 0 && (
+                      <div className="border-t pt-4">
+                        <h5 className="font-semibold mb-3">Materials ({totalItems} items)</h5>
+                        <div className="space-y-2">
+                          {site.materials.filter(m => m.quantity > 0).map((material) => {
+                            const materialType = getMaterialType(material.materialTypeId);
+                            if (!materialType) return null;
+                            return (
+                              <div key={material.materialTypeId} className="flex justify-between items-center p-2 bg-muted rounded">
+                                <div>
+                                  <span className="font-medium">{materialType.name} ({materialType.size})</span>
+                                  <span className="text-sm text-muted-foreground ml-2">× {material.quantity}</span>
+                                </div>
+                                <span className="text-sm">₹{materialType.rentPerDay}/day</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {site.materials.filter(m => m.quantity > 0).length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-4 border-t">
+                        No materials currently at this site
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </main>
 
-        <AddSiteDialog
-          open={addSiteOpen}
-          onOpenChange={setAddSiteOpen}
+        {/* Dialogs for this customer */}
+        <RecordMaterialReturnDialog 
+          open={returnOpen} 
+          onOpenChange={setReturnOpen} 
+          onSuccess={refresh}
+          preSelectedCustomerId={customer.id}
+        />
+        <RecordPaymentDialog 
+          open={paymentOpen} 
+          onOpenChange={setPaymentOpen} 
+          onSuccess={refresh}
+          preSelectedCustomerId={customer.id}
+        />
+        <RecordDepositDialog 
+          open={depositOpen} 
+          onOpenChange={setDepositOpen} 
+          onSuccess={refresh}
+          preSelectedCustomerId={customer.id}
+        />
+        <InventoryDialog open={inventoryOpen} onOpenChange={setInventoryOpen} />
+        <AddSiteDialog 
+          open={addSiteOpen} 
+          onOpenChange={setAddSiteOpen} 
           onSuccess={refresh}
           customerName={customer.name}
         />
-        <IssueMoreMaterialsDialog
-          open={issueMoreOpen}
-          onOpenChange={setIssueMoreOpen}
-          onSuccess={refresh}
-          customerName={customer.name}
-          siteName={selectedSite?.siteName || ""}
-          location={selectedSite?.location || ""}
-        />
-        <RecordMaterialReturnDialog
-          open={returnOpen}
-          onOpenChange={setReturnOpen}
-          onSuccess={refresh}
-          preSelectedCustomerId={customer.id}
-        />
-        <RecordPaymentDialog
-          open={paymentOpen}
-          onOpenChange={setPaymentOpen}
-          onSuccess={refresh}
-          preSelectedCustomerId={customer.id}
-        />
-        <RecordDepositDialog
-          open={depositOpen}
-          onOpenChange={setDepositOpen}
-          onSuccess={refresh}
-          preSelectedCustomerId={customer.id}
-        />
-        <InventoryDialog
-          open={inventoryOpen}
-          onOpenChange={setInventoryOpen}
-        />
+        {selectedSite && (
+          <IssueMoreMaterialsDialog
+            open={issueMoreOpen}
+            onOpenChange={setIssueMoreOpen}
+            onSuccess={refresh}
+            customerName={customer.name}
+            siteName={selectedSite.siteName}
+            location={selectedSite.location}
+          />
+        )}
       </div>
     );
   }
@@ -595,23 +1005,18 @@ const AdminDashboard = () => {
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead>Customer</TableHead>
-                  <TableHead className="text-center">Items Held</TableHead>
                   <TableHead className="text-right">Pending Amount</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
                       No customers found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((customer) => {
-                    const totalItems = customer.sites.reduce(
-                      (sum, site) => sum + site.materials.reduce((s, m) => s + m.quantity, 0),
-                      0
-                    );
                     const totalPending = customer.sites.reduce(
                       (sum, site) => sum + calculateSiteRent(site).remainingDue,
                       0
@@ -630,29 +1035,6 @@ const AdminDashboard = () => {
                               {customer.sites.length} site(s)
                             </p>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <span className="font-semibold hover:text-primary cursor-help">
-                                  {totalItems}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="space-y-1">
-                                  {customer.sites.map((site) => {
-                                    const siteItems = site.materials.reduce((s, m) => s + m.quantity, 0);
-                                    return siteItems > 0 ? (
-                                      <p key={site.id}>
-                                        {site.siteName}: {siteItems} items
-                                      </p>
-                                    ) : null;
-                                  })}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
                         </TableCell>
                         <TableCell className="text-right font-semibold">
                           ₹{totalPending.toLocaleString("en-IN")}

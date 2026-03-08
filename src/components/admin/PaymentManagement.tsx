@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getCustomers } from "@/lib/rental-store";
-import { updatePaymentRecord, deleteHistoryEvent } from "@/lib/supabase-store";
+import { updatePaymentRecord, deleteHistoryEvent, updateSitePayment } from "@/lib/supabase-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { getCurrentUser, logActivity } from "@/lib/auth-service";
 import type { Customer, HistoryEvent } from "@/lib/rental-store";
 
-interface PaymentWithContext extends HistoryEvent {
+interface PaymentWithContext extends Omit<HistoryEvent, 'id'> {
+  id: string; // Required for deletion
   customerName: string;
   customerId: string;
   siteName: string;
@@ -61,9 +62,10 @@ const PaymentManagement = () => {
       customers.forEach((customer: Customer) => {
         customer.sites.forEach((site) => {
           site.history.forEach((event) => {
-            if (event.action === 'Payment' && event.amount) {
+            if (event.action === 'Payment' && event.amount && event.id) {
               allPayments.push({
                 ...event,
+                id: event.id,
                 customerName: customer.name,
                 customerId: customer.id,
                 siteName: site.siteName
@@ -142,12 +144,33 @@ const PaymentManagement = () => {
       return;
     }
 
-    const success = await deleteHistoryEvent(payment.date);
+    // Check if payment has an ID
+    if (!payment.id) {
+      toast.error("Cannot delete payment: Missing ID");
+      return;
+    }
+
+    const success = await deleteHistoryEvent(payment.id);
 
     if (success) {
+      // Recalculate the site's amountPaid by summing all remaining payment history events
+      const customers = await getCustomers();
+      const customer = customers.find(c => c.id === payment.customerId);
+      const site = customer?.sites.find(s => s.siteName === payment.siteName);
+      
+      if (site) {
+        // Calculate total paid from remaining payment history events
+        const totalPaid = site.history
+          .filter(e => e.action === 'Payment' && e.amount)
+          .reduce((sum, e) => sum + (e.amount || 0), 0);
+        
+        // Update the site's amountPaid in database
+        await updateSitePayment(site.id, totalPaid);
+      }
+      
       toast.success("Payment deleted successfully");
       if (currentUser) {
-        await logActivity(currentUser.id, 'delete_payment', 'payment', payment.date, {
+        await logActivity(currentUser.id, 'delete_payment', 'payment', payment.id, {
           customer: payment.customerName,
           site: payment.siteName,
           amount: payment.amount
@@ -201,8 +224,8 @@ const PaymentManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPayments.map((payment, index) => (
-                    <TableRow key={`${payment.date}-${index}`}>
+                  {filteredPayments.map((payment) => (
+                    <TableRow key={payment.id || `${payment.date}-${payment.customerName}`}>
                       <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
                       <TableCell className="font-medium">{payment.customerName}</TableCell>
                       <TableCell>{payment.siteName}</TableCell>

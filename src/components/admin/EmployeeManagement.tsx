@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { createEmployee, getEmployees, updateEmployee } from "@/lib/auth-service";
+import { createEmployee, getEmployees, updateEmployee, deleteEmployee } from "@/lib/auth-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, UserX, UserCheck, Activity } from "lucide-react";
+import { Plus, Edit, UserX, UserCheck, Activity, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import EmployeeActivityDialog from "./EmployeeActivityDialog";
 
@@ -114,6 +114,21 @@ const EmployeeManagement = () => {
     }
   };
 
+  const handleDeleteEmployee = async (employee: Employee) => {
+    if (!confirm(`Are you sure you want to permanently delete employee "${employee.fullName}" (${employee.username})? This action cannot be undone.`)) {
+      return;
+    }
+
+    const result = await deleteEmployee(employee.id);
+
+    if (result.success) {
+      toast.success("Employee deleted successfully");
+      loadEmployees();
+    } else {
+      toast.error(result.error || "Failed to delete employee");
+    }
+  };
+
   const openEditDialog = (employee: Employee) => {
     setSelectedEmployee(employee);
     setEditFullName(employee.fullName);
@@ -199,6 +214,14 @@ const EmployeeManagement = () => {
                           ) : (
                             <UserCheck className="h-4 w-4" />
                           )}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteEmployee(employee)}
+                          title="Delete Employee"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>

@@ -104,8 +104,9 @@ export interface MaterialItem {
 }
 
 export interface HistoryEvent {
+  id?: string; // UUID from database
   date: string; // ISO string
-  action: "Issued" | "Returned" | "Payment";
+  action: "Issued" | "Returned" | "Payment" | "Invoice";
   siteId?: string; // Which site this event belongs to
   materialTypeId?: string;
   quantity?: number;
@@ -115,6 +116,8 @@ export interface HistoryEvent {
   paymentMethod?: string; // Payment method used (Father, Mother, Own, Cash, or custom)
   paymentScreenshot?: string; // Base64 encoded screenshot for UPI/Bank Transfer
   employeeId?: string; // ID of employee who performed this action
+  transportCharges?: number; // Transportation charges for returns
+  invoiceNumber?: string; // Invoice number if this is an invoice generation event
 }
 
 export interface Site {
@@ -130,6 +133,8 @@ export interface Site {
   history: HistoryEvent[]; // History specific to this site
   vehicleNo?: string; // Vehicle number used for shipping
   challanNo?: string; // Challan number for the shipment
+  totalDueOverride?: number; // Manual override for total due
+  useOverride?: boolean; // Whether to use override instead of calculated
 }
 
 export interface Customer {
@@ -498,7 +503,8 @@ export async function recordReturn(
   quantityLost: number,
   hasOwnLabor: boolean,
   returnDate?: string,
-  employeeId?: string
+  employeeId?: string,
+  transportCharges?: number
 ): Promise<boolean> {
   try {
     const customers = await getCustomers();
@@ -523,7 +529,8 @@ export async function recordReturn(
       quantity: quantityReturned,
       quantityLost,
       hasOwnLabor,
-      employeeId
+      employeeId,
+      transportCharges
     });
 
     // Update inventory (add back returned quantity, but not lost items)
@@ -629,16 +636,50 @@ export function calculateSiteRent(site: Site): {
     }
   });
   
-  // Calculate total initial items for penalty
-  let totalInitialItems = site.materials.reduce((sum, m) => sum + (m.initialQuantity || 0), 0);
+  // Calculate penalty ONLY for materials still held after grace period
+  // AND only if grace period charges are not yet paid
+  let penaltyAmount = 0;
   
-  if (totalInitialItems === 0) {
-    totalInitialItems = site.history
-      .filter(h => h.action === "Issued")
-      .reduce((sum, h) => sum + (h.quantity || 0), 0);
+  // If all materials are returned, check if they were returned within grace period
+  const allMaterialsReturned = site.materials.every(m => m.quantity === 0);
+  
+  if (allMaterialsReturned) {
+    // Find the last return date
+    const returnEvents = site.history.filter(h => h.action === "Returned");
+    if (returnEvents.length > 0) {
+      const lastReturnDate = new Date(Math.max(...returnEvents.map(e => new Date(e.date).getTime())));
+      const daysUntilReturn = differenceInDays(lastReturnDate, new Date(site.issueDate));
+      
+      // Only apply penalty if materials were returned AFTER grace period
+      // AND grace period charges were not paid
+      if (daysUntilReturn > maxGracePeriod) {
+        const gracePeriodCharges = rentAmount + issueLoadingCharges;
+        const isPaidForGracePeriod = site.amountPaid >= gracePeriodCharges;
+        
+        if (!isPaidForGracePeriod) {
+          const totalInitialItems = site.history
+            .filter(h => h.action === "Issued")
+            .reduce((sum, h) => sum + (h.quantity || 0), 0);
+          
+          const daysOverdueUntilReturn = daysUntilReturn - maxGracePeriod;
+          penaltyAmount = daysOverdueUntilReturn * totalInitialItems * PENALTY_PER_ITEM_PER_DAY;
+        }
+      }
+      // If returned within grace period, penalty is 0
+    }
+  } else {
+    // Materials still held after grace period
+    // Only charge penalty if grace period charges are NOT yet paid
+    if (daysOverdue > 0) {
+      const gracePeriodCharges = rentAmount + issueLoadingCharges;
+      const isPaidForGracePeriod = site.amountPaid >= gracePeriodCharges;
+      
+      if (!isPaidForGracePeriod) {
+        const currentlyHeldItems = site.materials.reduce((sum, m) => sum + m.quantity, 0);
+        penaltyAmount = daysOverdue * currentlyHeldItems * PENALTY_PER_ITEM_PER_DAY;
+      }
+    }
   }
-  
-  const penaltyAmount = daysOverdue * totalInitialItems * PENALTY_PER_ITEM_PER_DAY;
   
   // Calculate base charges
   const baseCharges = rentAmount + issueLoadingCharges + penaltyAmount;

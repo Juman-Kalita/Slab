@@ -837,7 +837,6 @@ const Dashboard = () => {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Customer</TableHead>
-                    <TableHead className="text-center">Items Held</TableHead>
                     <TableHead className="text-right">Pending Amount</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -845,35 +844,15 @@ const Dashboard = () => {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
                           {search || locationSearch ? "No customers found matching your search" : "No rentals yet. Issue materials to get started!"}
                         </TableCell>
                       </TableRow>
                     ) : (
                       filtered.map((c) => {
-                      // Calculate total items across all sites
-                      const totalItems = c.sites.reduce((total, site) => {
-                        return total + site.materials.filter(m => m.quantity > 0).reduce((sum, m) => sum + m.quantity, 0);
-                      }, 0);
-                      
                       // Calculate pending amount across all sites
                       const customerCalc = calculateRent(c);
                       const pendingAmount = customerCalc.totalPendingAmount;
-                      
-                      // Get materials breakdown for tooltip
-                      const materialsBreakdown = c.sites.flatMap(site => 
-                        site.materials
-                          .filter(m => m.quantity > 0)
-                          .map(m => {
-                            const mt = getMaterialType(m.materialTypeId);
-                            return {
-                              siteName: site.siteName,
-                              materialName: mt?.name || 'Unknown',
-                              materialSize: mt?.size || '',
-                              quantity: m.quantity
-                            };
-                          })
-                      );
                       
                       return (
                         <TableRow
@@ -894,30 +873,6 @@ const Dashboard = () => {
                                 `${c.sites.length} site(s)`
                               )}
                             </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help hover:text-primary transition-colors">{totalItems}</span>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-sm">
-                                <div className="space-y-2">
-                                  <div className="font-semibold text-sm">Materials Held:</div>
-                                  {materialsBreakdown.length > 0 ? (
-                                    <div className="space-y-1">
-                                      {materialsBreakdown.map((item, idx) => (
-                                        <div key={idx} className="text-xs flex justify-between gap-4">
-                                          <span className="text-muted-foreground">{item.siteName}:</span>
-                                          <span>{item.materialName} {item.materialSize && `(${item.materialSize})`} × {item.quantity}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs text-muted-foreground">No materials held</div>
-                                  )}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
                           </TableCell>
                           <TableCell className="text-right font-semibold">₹{pendingAmount.toLocaleString("en-IN")}</TableCell>
                         </TableRow>

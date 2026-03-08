@@ -242,6 +242,60 @@ export async function updateEmployee(
   }
 }
 
+export async function deleteEmployee(
+  employeeId: string
+): Promise<{ success: boolean; error?: string }> {
+  const currentUser = getCurrentUser();
+  if (!currentUser || currentUser.role !== 'admin') {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  try {
+    // First, check if employee has any history records
+    const { data: historyCount, error: countError } = await supabase
+      .from('history_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('employee_id', employeeId);
+
+    if (countError) throw countError;
+
+    // If employee has history, set their records to null instead of deleting
+    if (historyCount && historyCount > 0) {
+      // Update history_events to remove employee reference
+      const { error: updateError } = await supabase
+        .from('history_events')
+        .update({ employee_id: null })
+        .eq('employee_id', employeeId);
+
+      if (updateError) throw updateError;
+    }
+
+    // Update activity_log to remove employee reference
+    const { error: activityUpdateError } = await supabase
+      .from('activity_log')
+      .update({ user_id: null })
+      .eq('user_id', employeeId);
+
+    if (activityUpdateError) throw activityUpdateError;
+
+    // Now delete the employee
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', employeeId)
+      .eq('role', 'employee'); // Only allow deleting employees, not admins
+
+    if (error) throw error;
+
+    await logActivity(currentUser.id, 'delete_employee', 'user', employeeId, {});
+
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete employee:', error);
+    return { success: false, error: 'Failed to delete employee. Please try again.' };
+  }
+}
+
 export async function changeAdminPassword(
   currentPassword: string,
   newPassword: string

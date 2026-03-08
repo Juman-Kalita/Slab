@@ -246,7 +246,7 @@ export async function addHistoryEvent(
   siteId: string,
   event: {
     date: string;
-    action: 'Issued' | 'Returned' | 'Payment';
+    action: 'Issued' | 'Returned' | 'Payment' | 'Invoice';
     materialTypeId?: string;
     quantity?: number;
     amount?: number;
@@ -255,6 +255,8 @@ export async function addHistoryEvent(
     paymentMethod?: string;
     paymentScreenshot?: string;
     employeeId?: string;
+    transportCharges?: number;
+    invoiceNumber?: string;
   }
 ): Promise<void> {
   const { error } = await supabase

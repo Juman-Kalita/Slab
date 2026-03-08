@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Edit, Trash2, Save } from "lucide-react";
-import { updateCustomer, updateSite, updateMaterialQuantity, deleteSite, updateAdvanceDeposit } from "@/lib/supabase-store";
+import { updateCustomer, updateSite, updateMaterialQuantity, deleteSite, updateAdvanceDeposit, updateSitePayment } from "@/lib/supabase-store";
 import { getMaterialType } from "@/lib/rental-store";
 import { getCurrentUser, logActivity } from "@/lib/auth-service";
 import type { Customer } from "@/lib/rental-store";
@@ -39,6 +39,10 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
   // Material editing
   const [editingMaterial, setEditingMaterial] = useState<string | null>(null);
   const [materialEdits, setMaterialEdits] = useState<Record<string, number>>({});
+
+  // Site payment editing
+  const [editingSitePayment, setEditingSitePayment] = useState<string | null>(null);
+  const [sitePaymentEdits, setSitePaymentEdits] = useState<Record<string, string>>({});
 
   const [saving, setSaving] = useState(false);
 
@@ -168,6 +172,38 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
       toast.error("Failed to update material");
     }
     setSaving(false);
+  };
+
+  const handleEditSitePayment = (siteId: string, currentPaid: number) => {
+    setEditingSitePayment(siteId);
+    setSitePaymentEdits({ ...sitePaymentEdits, [siteId]: currentPaid.toString() });
+  };
+
+  const handleSaveSitePayment = async (siteId: string, siteName: string) => {
+    const newPaid = parseFloat(sitePaymentEdits[siteId]);
+    if (isNaN(newPaid) || newPaid < 0) {
+      toast.error("Invalid payment amount");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateSitePayment(siteId, newPaid);
+      toast.success("Site payment updated");
+      if (currentUser) {
+        await logActivity(currentUser.id, 'update_site_payment', 'site', siteId, { 
+          siteName,
+          amountPaid: newPaid 
+        });
+      }
+      setEditingSitePayment(null);
+      onSuccess();
+    } catch (error) {
+      console.error('Error updating site payment:', error);
+      toast.error("Failed to update payment");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -393,8 +429,8 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
           <TabsContent value="financial" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Financial Information</CardTitle>
-                <CardDescription>Manage advance deposits and payments</CardDescription>
+                <CardTitle>Advance Deposit</CardTitle>
+                <CardDescription>Manage customer advance deposit</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -422,6 +458,91 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
                     Current: ₹{customer.advanceDeposit.toLocaleString("en-IN")}
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Site Payments</CardTitle>
+                <CardDescription>Adjust paid amounts for each site</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Site Name</TableHead>
+                      <TableHead className="text-right">Amount Paid (₹)</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customer.sites.map((site) => {
+                      const isEditingPayment = editingSitePayment === site.id;
+                      
+                      return (
+                        <TableRow key={site.id}>
+                          <TableCell className="font-medium">
+                            <div>
+                              <div>{site.siteName}</div>
+                              <div className="text-xs text-muted-foreground">{site.location}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditingPayment ? (
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                value={sitePaymentEdits[site.id] || site.amountPaid}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                    setSitePaymentEdits({ ...sitePaymentEdits, [site.id]: value });
+                                  }
+                                }}
+                                className="w-32 text-right ml-auto"
+                              />
+                            ) : (
+                              <span className="font-semibold text-green-600">
+                                ₹{site.amountPaid.toLocaleString("en-IN")}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditingPayment ? (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSaveSitePayment(site.id, site.siteName)}
+                                  disabled={saving}
+                                >
+                                  <Save className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditingSitePayment(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditSitePayment(site.id, site.amountPaid)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                <p className="text-xs text-muted-foreground mt-4">
+                  Note: Editing the paid amount will directly update the site's payment record. This does not create a payment history event.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
