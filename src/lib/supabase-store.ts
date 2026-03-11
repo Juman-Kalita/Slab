@@ -48,6 +48,8 @@ export async function createCustomerWithSite(
     issueDate: string;
     originalRentCharge: number;
     originalIssueLC: number;
+    vehicleNo?: string;
+    challanNo?: string;
   },
   materials: Array<{
     materialTypeId: string;
@@ -95,7 +97,9 @@ export async function createCustomerWithSite(
       amountPaid: 0,
       lastSettlementDate: null,
       originalRentCharge: siteData.originalRentCharge,
-      originalIssueLC: siteData.originalIssueLC
+      originalIssueLC: siteData.originalIssueLC,
+      vehicleNo: siteData.vehicleNo,
+      challanNo: siteData.challanNo
     }, customer.id))
     .select()
     .single();
@@ -131,6 +135,8 @@ export async function addSiteToCustomer(
     originalRentCharge: number;
     originalIssueLC: number;
     amountPaid?: number;
+    vehicleNo?: string;
+    challanNo?: string;
   },
   materials: Array<{
     materialTypeId: string;
@@ -158,6 +164,11 @@ export async function addSiteToCustomer(
       issueDate: siteData.issueDate,
       amountPaid: siteData.amountPaid || 0,
       lastSettlementDate: null,
+      originalRentCharge: siteData.originalRentCharge,
+      originalIssueLC: siteData.originalIssueLC,
+      vehicleNo: siteData.vehicleNo,
+      challanNo: siteData.challanNo
+    }, customerId))
       originalRentCharge: siteData.originalRentCharge,
       originalIssueLC: siteData.originalIssueLC
     }, customerId))

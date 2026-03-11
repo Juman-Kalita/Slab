@@ -12,6 +12,7 @@ interface InvoiceData {
   issueLoadingCharges: number;
   penaltyAmount: number;
   returnLoadingCharges: number;
+  transportCharges: number;
   lostItemsPenalty: number;
   totalRequired: number;
   amountPaid: number;
@@ -28,291 +29,318 @@ interface InvoiceData {
 export function generateInvoice(data: InvoiceData): void {
   const doc = new jsPDF();
   
-  // Header Box with Company Info
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.5);
-  doc.rect(10, 10, 190, 35);
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
   
-  // Customer Name
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Name of Customer:", 12, 18);
-  doc.setFont("helvetica", "bold");
+  // Company Logo/Name (Left)
+  doc.setFillColor(0, 0, 0);
+  doc.rect(15, 15, 15, 15, "F");
+  
   doc.setFontSize(14);
-  doc.text(data.customer.name.toUpperCase(), 50, 18);
-  
-  // Company Info (Right Side)
-  doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("S. S. KHORJUWEKAR", 140, 16);
+  doc.text("S. S. KHORJUWEKAR", 35, 20);
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.text("At. Post Majgaon - 416 541", 140, 21);
-  doc.text("Tal. Sawantwadi, Dist. Sindhudurg", 140, 25);
-  doc.text("Cell - 9422055041 / 9422076645", 140, 29);
+  doc.text("At. Post Majgaon - 416 541", 35, 25);
+  doc.text("Tal. Sawantwadi, Dist. Sindhudurg", 35, 29);
+  doc.text("Site Address: Dodamarg, Dodamarg", 35, 33);
+  doc.text("Cell - 9422055041 / 9422076645", 35, 37);
   
-  // Site Address
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Site Address:", 12, 28);
+  // INVOICE Title (Right)
+  doc.setFontSize(32);
   doc.setFont("helvetica", "bold");
-  doc.text(`${data.site.siteName}, ${data.site.location}`, 35, 28);
+  doc.text("INVOICE", pageWidth - 15, 28, { align: "right" });
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`DATE: ${format(new Date(data.invoiceDate), "dd.MM.yyyy")}`, pageWidth - 15, 35, { align: "right" });
   
-  // Materials Summary
-  const materialsOnHire = data.materialBreakdown
-    .map(m => `${m.materialType.name}(${m.materialType.size}) ${m.initialQuantity} Nos`)
-    .join(", ");
+  // Gray Box for Invoice To and Ship To
+  doc.setFillColor(245, 245, 245);
+  doc.rect(15, 45, pageWidth - 30, 50, "F");
+  
+  // Invoice To (Left)
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(80, 80, 80);
+  doc.text("INVOICE TO", 20, 52);
+  
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+  doc.text(data.customer.name.toUpperCase(), 20, 60);
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text("No. of Materials on Hire:", 12, 35);
-  doc.setFont("helvetica", "bold");
-  const splitMaterials = doc.splitTextToSize(materialsOnHire, 120);
-  doc.text(splitMaterials, 55, 35);
+  doc.setTextColor(100, 100, 100);
   
-  // Invoice Number and Date (Right Side)
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("No. :", 165, 35);
-  doc.setFont("helvetica", "bold");
-  doc.text(data.invoiceNumber.split("-").pop() || data.invoiceNumber, 175, 35);
-  
-  doc.setFont("helvetica", "normal");
-  doc.text("Date :", 165, 41);
-  doc.setFont("helvetica", "bold");
-  doc.text(format(new Date(data.invoiceDate), "dd/MM/yy"), 175, 41);
-  
-  // Shipping Details (Vehicle & Challan)
-  let yPos = 42;
-  if (data.site.vehicleNo || data.site.challanNo) {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    if (data.site.vehicleNo) {
-      doc.text(`Vehicle No: ${data.site.vehicleNo}`, 12, yPos);
-      yPos += 5;
-    }
-    if (data.site.challanNo) {
-      doc.text(`Challan No: ${data.site.challanNo}`, 12, yPos);
-      yPos += 5;
-    }
+  let leftY = 67;
+  if (data.customer.address) {
+    const addressLines = doc.splitTextToSize(data.customer.address, 75);
+    doc.text(addressLines, 20, leftY);
+    leftY += addressLines.length * 5;
+  }
+  if (data.customer.contactNo) {
+    doc.text(data.customer.contactNo, 20, leftY + 3);
   }
   
-  // Main Table
-  const tableStartY = 50;
-  
-  // Table Header
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.5);
-  doc.rect(10, tableStartY, 190, 10);
-  doc.line(15, tableStartY, 15, tableStartY + 10);
-  doc.line(140, tableStartY, 140, tableStartY + 10);
-  doc.line(160, tableStartY, 160, tableStartY + 10);
-  doc.line(180, tableStartY, 180, tableStartY + 10);
-  
-  doc.setFontSize(9);
+  // Ship To (Right)
   doc.setFont("helvetica", "bold");
-  doc.text("Sr.", 11, tableStartY + 6);
-  doc.text("No.", 11, tableStartY + 9);
-  doc.text("Description", 70, tableStartY + 7);
-  doc.text("Qty.", 145, tableStartY + 6);
-  doc.text("in Nos.", 143, tableStartY + 9);
-  doc.text("Rate", 166, tableStartY + 7);
-  doc.text("Amount", 185, tableStartY + 6);
-  doc.text("Rs.     Ps.", 182, tableStartY + 9);
+  doc.setTextColor(80, 80, 80);
+  doc.setFontSize(9);
+  doc.text("SHIP TO", pageWidth / 2 + 5, 52);
   
-  // Table Content
-  let contentY = tableStartY + 15;
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+  doc.text(data.site.siteName.toUpperCase(), pageWidth / 2 + 5, 60);
+  
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
   
-  // Materials List
-  data.materialBreakdown.forEach((item, index) => {
-    if (index > 0) contentY += 5;
-    doc.text(`${item.materialType.name} ${item.materialType.size}`, 17, contentY);
-    contentY += 4;
-  });
+  let rightY = 67;
+  const locationLines = doc.splitTextToSize(data.site.location, 75);
+  doc.text(locationLines, pageWidth / 2 + 5, rightY);
+  rightY += locationLines.length * 5;
   
-  contentY += 5;
+  if (data.site.vehicleNo) {
+    doc.text(`Vehicle: ${data.site.vehicleNo}`, pageWidth / 2 + 5, rightY + 3);
+    rightY += 5;
+  }
+  if (data.site.challanNo) {
+    doc.text(`Challan: ${data.site.challanNo}`, pageWidth / 2 + 5, rightY + 3);
+  }
   
-  // Payment Details Section
-  doc.setFont("helvetica", "bold");
-  doc.text(`1. Payment of ${format(new Date(data.site.issueDate), "dd/MM/yy")} to ${format(new Date(), "dd/MM/yy")}`, 17, contentY);
-  contentY += 5;
-  
-  // Calculate days
-  const daysElapsed = Math.floor((new Date().getTime() - new Date(data.site.issueDate).getTime()) / (1000 * 60 * 60 * 24));
-  
+  // Date and Invoice Number
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`(${daysElapsed} days) ×`, 17, contentY);
+  doc.text(`DATE: ${format(new Date(data.site.issueDate), "dd MMMM yyyy")}`, 15, 105);
+  doc.text(`INVOICE NO: ${data.invoiceNumber}`, pageWidth - 15, 105, { align: "right" });
   
-  // Show material breakdown with rates
+  // Items Table
+  const tableData: any[] = [];
+  let itemNo = 1;
+  
+  // Calculate days from issue date to now
+  const daysElapsed = Math.max(1, Math.floor((new Date().getTime() - new Date(data.site.issueDate).getTime()) / (1000 * 60 * 60 * 24)));
+  
+  // Add material items - use the actual rent amount from data, not recalculated
   data.materialBreakdown.forEach((item) => {
-    contentY += 5;
-    doc.text(`(${item.materialType.size}) ${item.initialQuantity}`, 35, contentY);
-    doc.text(`${item.materialType.rentPerDay.toFixed(2)}`, 145, contentY);
-    const itemTotal = item.initialQuantity * item.materialType.rentPerDay * daysElapsed;
-    doc.text(itemTotal.toFixed(2), 185, contentY, { align: "right" });
+    // Calculate per-item rent from the total rent amount proportionally
+    const totalInitialQuantity = data.materialBreakdown.reduce((sum, m) => sum + m.initialQuantity, 0);
+    const itemRentPortion = totalInitialQuantity > 0 ? (item.initialQuantity / totalInitialQuantity) * data.rentAmount : 0;
+    
+    tableData.push([
+      itemNo++,
+      `${item.materialType.name} ${item.materialType.size}\n(${daysElapsed} days rental)`,
+      `Rs.${item.materialType.rentPerDay.toFixed(2)}`,
+      item.initialQuantity,
+      `Rs.${itemRentPortion.toFixed(2)}`
+    ]);
   });
   
-  contentY += 10;
-  
-  // Loading Charges
+  // Add loading charges
   if (data.issueLoadingCharges > 0) {
-    doc.text("2. Issue Loading & Unloading Charges", 17, contentY);
-    contentY += 5;
-    doc.text(data.issueLoadingCharges.toFixed(2), 185, contentY, { align: "right" });
-    contentY += 8;
+    tableData.push([
+      itemNo++,
+      "Issue Loading & Unloading Charges",
+      "-",
+      "-",
+      `Rs.${data.issueLoadingCharges.toFixed(2)}`
+    ]);
   }
   
-  // Return Loading Charges
   if (data.returnLoadingCharges > 0) {
-    doc.text("3. Return Loading & Unloading Charges", 17, contentY);
-    contentY += 5;
-    doc.text(data.returnLoadingCharges.toFixed(2), 185, contentY, { align: "right" });
-    contentY += 8;
+    tableData.push([
+      itemNo++,
+      "Return Loading & Unloading Charges",
+      "-",
+      "-",
+      `Rs.${data.returnLoadingCharges.toFixed(2)}`
+    ]);
   }
   
-  // Transport Charges
-  const transportCharges = data.site.history
-    .filter(h => h.action === "Returned" && h.transportCharges)
-    .reduce((sum, h) => sum + (h.transportCharges || 0), 0);
-  
-  if (transportCharges > 0) {
-    doc.text("4. Transportation Charges", 17, contentY);
-    contentY += 5;
-    doc.text(transportCharges.toFixed(2), 185, contentY, { align: "right" });
-    contentY += 8;
+  // Transport charges
+  if (data.transportCharges > 0) {
+    tableData.push([
+      itemNo++,
+      "Transportation Charges",
+      "-",
+      "-",
+      `Rs.${data.transportCharges.toFixed(2)}`
+    ]);
   }
   
-  // Late Penalty
+  // Penalties
   if (data.penaltyAmount > 0) {
-    doc.text(`5. Late Penalty (${data.daysOverdue} days overdue)`, 17, contentY);
-    contentY += 5;
-    doc.text(data.penaltyAmount.toFixed(2), 185, contentY, { align: "right" });
-    contentY += 8;
+    tableData.push([
+      itemNo++,
+      `Late Penalty (${data.daysOverdue} days overdue)`,
+      "-",
+      "-",
+      `Rs.${data.penaltyAmount.toFixed(2)}`
+    ]);
   }
   
-  // Lost Items Penalty
   if (data.lostItemsPenalty > 0) {
-    doc.text("6. Lost/Damaged Items Penalty", 17, contentY);
-    contentY += 5;
-    doc.text(data.lostItemsPenalty.toFixed(2), 185, contentY, { align: "right" });
-    contentY += 8;
+    tableData.push([
+      itemNo++,
+      "Lost/Damaged Items Penalty",
+      "-",
+      "-",
+      `Rs.${data.lostItemsPenalty.toFixed(2)}`
+    ]);
   }
   
-  contentY += 5;
+  // Calculate subtotal
+  const subtotal = data.rentAmount + data.issueLoadingCharges + data.returnLoadingCharges + 
+                   data.transportCharges + data.penaltyAmount + data.lostItemsPenalty;
   
-  // Payment History
+  autoTable(doc, {
+    startY: 115,
+    head: [["NO", "ITEM DESCRIPTION", "PRICE", "QUANTITY", "TOTAL"]],
+    body: tableData,
+    theme: "plain",
+    headStyles: {
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 9,
+      cellPadding: 5,
+    },
+    bodyStyles: {
+      fontSize: 9,
+      cellPadding: 5,
+      textColor: [60, 60, 60],
+    },
+    columnStyles: {
+      0: { cellWidth: 15, halign: "center" },
+      1: { cellWidth: 80 },
+      2: { cellWidth: 30, halign: "right" },
+      3: { cellWidth: 25, halign: "center" },
+      4: { cellWidth: 35, halign: "right" },
+    },
+    didDrawPage: (data) => {
+      // Draw line under header
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.5);
+      doc.line(15, data.cursor!.y - 5, pageWidth - 15, data.cursor!.y - 5);
+    },
+  });
+  
+  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  
+  // Subtotal, Tax, Grand Total
+  doc.setDrawColor(200, 200, 200);
+  doc.line(15, finalY, pageWidth - 15, finalY);
+  
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("SUBTOTAL:", pageWidth - 80, finalY + 8);
+  doc.text(`Rs.${subtotal.toFixed(2)}`, pageWidth - 15, finalY + 8, { align: "right" });
+  
+  // Payments
   const payments = data.site.history.filter(h => h.action === "Payment" && h.amount);
+  let paymentsY = finalY + 15;
+  
   if (payments.length > 0) {
     doc.setFont("helvetica", "bold");
-    doc.text("Payment History:", 17, contentY);
-    contentY += 5;
+    doc.text("PAYMENTS:", pageWidth - 80, paymentsY);
+    paymentsY += 7;
     
     doc.setFont("helvetica", "normal");
-    payments.forEach((payment, index) => {
-      const paymentDate = format(new Date(payment.date), "dd/MM/yy");
-      const paymentText = `Payment of ${paymentDate}`;
-      doc.text(paymentText, 17, contentY);
-      doc.text(`-${payment.amount?.toFixed(2)}`, 185, contentY, { align: "right" });
-      
-      if (payment.paymentMethod) {
-        doc.setFontSize(7);
-        doc.text(`(${payment.paymentMethod})`, 17, contentY + 3);
-        doc.setFontSize(9);
-      }
-      contentY += 6;
+    payments.forEach((payment) => {
+      const paymentDate = format(new Date(payment.date), "dd MMM yyyy");
+      doc.text(`${paymentDate}:`, pageWidth - 80, paymentsY);
+      doc.text(`-Rs.${payment.amount?.toFixed(2)}`, pageWidth - 15, paymentsY, { align: "right" });
+      paymentsY += 6;
     });
-    contentY += 5;
+    paymentsY += 3;
   }
   
-  // Previous Balance (if any previous invoices)
-  const previousInvoices = data.site.history.filter(h => h.action === "Invoice");
-  if (previousInvoices.length > 0) {
-    doc.setFont("helvetica", "bold");
-    const lastInvoice = previousInvoices[previousInvoices.length - 1];
-    doc.text(`Last Balance (Bill No. ${lastInvoice.invoiceNumber || "N/A"})`, 17, contentY);
-    contentY += 5;
-    doc.setFont("helvetica", "normal");
-    // This would need to be calculated from history
-    contentY += 5;
-  }
+  doc.setDrawColor(200, 200, 200);
+  doc.line(15, paymentsY, pageWidth - 15, paymentsY);
   
-  // Current Balance
-  contentY += 5;
-  doc.setFont("helvetica", "bold");
-  doc.text(`Current Balance (Bill No. ${data.invoiceNumber.split("-").pop()})`, 17, contentY);
-  contentY += 5;
-  
-  // Highlight the final amount
-  doc.setFillColor(255, 255, 0);
-  doc.rect(165, contentY - 4, 30, 6, "F");
-  doc.setFont("helvetica", "bold");
+  // Grand Total
   doc.setFontSize(11);
-  doc.text(data.remainingDue.toFixed(2), 185, contentY, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.text("GRAND TOTAL:", pageWidth - 80, paymentsY + 8);
+  doc.text(`Rs.${data.remainingDue.toFixed(2)}`, pageWidth - 15, paymentsY + 8, { align: "right" });
   
-  // Draw table border
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.5);
-  doc.rect(10, tableStartY, 190, contentY - tableStartY + 10);
-  doc.line(15, tableStartY, 15, contentY + 10);
-  doc.line(140, tableStartY, 140, contentY + 10);
-  doc.line(160, tableStartY, 160, contentY + 10);
-  doc.line(180, tableStartY, 180, contentY + 10);
-  
-  // Total line
+  // Total Due (Large) - Left aligned with more space
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("Total ....", 145, contentY + 8);
-  doc.text(data.remainingDue.toFixed(2), 185, contentY + 8, { align: "right" });
+  doc.setTextColor(0, 0, 0);
+  doc.text("TOTAL DUE", 15, paymentsY + 20);
+  doc.setFontSize(32);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Rs.${data.remainingDue.toLocaleString("en-IN")}`, 15, paymentsY + 35);
   
-  // Signature Section
-  const signatureY = contentY + 20;
-  doc.setFontSize(9);
+  // Bottom section - 3 columns with proper spacing
+  const bottomY = paymentsY + 55;
+  
+  // Left Column - Customer Signature
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("CUSTOMER SIGNATURE", 15, bottomY);
+  
+  // Draw signature line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(15, bottomY + 20, 65, bottomY + 20);
+  
   doc.setFont("helvetica", "normal");
-  doc.text("Customer Signature", 15, signatureY);
-  doc.text("Owner Signature", 160, signatureY);
-  
-  // Footer with additional info
-  const footerY = 270;
   doc.setFontSize(8);
+  doc.text(data.customer.name, 15, bottomY + 25);
+  
+  // Middle Column - Terms & Condition
+  const middleX = 80;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("Terms & Condition", middleX, bottomY);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
-  
-  // Contact info
-  if (data.customer.contactNo) {
-    doc.text(`Customer Contact: ${data.customer.contactNo}`, 15, footerY);
-  }
-  
-  // Issue date
-  doc.text(`Issue Date: ${format(new Date(data.site.issueDate), "dd MMM yyyy")}`, 15, footerY + 5);
-  
-  // Grace period info
+  doc.setFontSize(8);
   const gracePeriod = data.materialBreakdown[0]?.materialType.gracePeriodDays || 30;
-  doc.text(`Grace Period: ${gracePeriod} days`, 15, footerY + 10);
+  doc.text(`Grace period: ${gracePeriod} days from issue date.`, middleX, bottomY + 7);
+  doc.text("Late penalty: Rs.10 per item per day", middleX, bottomY + 13);
+  doc.text("after grace period.", middleX, bottomY + 18);
   
-  // Status
-  if (data.isWithinGracePeriod) {
-    doc.setTextColor(0, 150, 0);
-    doc.text("Status: Within Grace Period", 15, footerY + 15);
-  } else {
-    doc.setTextColor(200, 0, 0);
-    doc.text(`Status: Overdue by ${data.daysOverdue} days`, 15, footerY + 15);
-  }
+  // Right Column - Owner Signature
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("OWNER SIGNATURE", pageWidth - 15, bottomY, { align: "right" });
   
-  doc.setTextColor(100);
-  doc.text(`Generated: ${format(new Date(), "dd MMM yyyy, hh:mm a")}`, 105, footerY + 20, { align: "center" });
+  // Draw signature line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(pageWidth - 65, bottomY + 20, pageWidth - 15, bottomY + 20);
+  
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text("S. S. KHORJUWEKAR", pageWidth - 15, bottomY + 25, { align: "right" });
+  
+  // Footer - Questions section
+  const footerY = bottomY + 35;
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text("Questions?", 15, footerY);
+  doc.setFontSize(7);
+  doc.text("Email us at info@sskhorjuwekar.com", 15, footerY + 5);
+  doc.text("or call us at 9422055041 / 9422076645", 15, footerY + 10);
+  
+  // Bottom footer - Company address
+  doc.setFontSize(7);
+  doc.setTextColor(150, 150, 150);
+  doc.text("At. Post Majgaon - 416 541, Tal. Sawantwadi, Dist. Sindhudurg", 15, pageHeight - 8);
   
   // Save PDF
-  const fileName = `Invoice_${data.invoiceNumber}_${data.customer.name.replace(/\s+/g, "_")}_${data.site.siteName.replace(/\s+/g, "_")}.pdf`;
+  const fileName = `Invoice_${data.invoiceNumber}_${data.customer.name.replace(/\s+/g, "_")}.pdf`;
   doc.save(fileName);
 }
 
 export function generateInvoiceNumber(): string {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-  return `INV-${year}${month}${day}-${random}`;
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+  return `F${random}A`;
 }

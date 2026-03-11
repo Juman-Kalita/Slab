@@ -11,6 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { HardHat, LogOut, Users, Package, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, PackageSearch, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ThemeToggle } from "@/components/theme-toggle";
 import IssueMaterialsDialog from "@/components/IssueMaterialsDialog";
 import RecordMaterialReturnDialog from "@/components/RecordMaterialReturnDialog";
 import RecordPaymentDialog from "@/components/RecordPaymentDialog";
@@ -127,6 +128,7 @@ const Dashboard = () => {
       issueLoadingCharges: siteCalc.issueLoadingCharges,
       penaltyAmount: siteCalc.penaltyAmount,
       returnLoadingCharges: siteCalc.returnLoadingCharges,
+      transportCharges: siteCalc.transportCharges,
       lostItemsPenalty: siteCalc.lostItemsPenalty,
       totalRequired: siteCalc.totalRequired,
       amountPaid: site.amountPaid,
@@ -155,9 +157,12 @@ const Dashboard = () => {
             <HardHat className="h-7 w-7 text-accent" />
             <h1 className="text-lg font-bold text-primary-foreground">Material Rental Pro</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
-            <LogOut className="mr-1 h-4 w-4" /> Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
+              <LogOut className="mr-1 h-4 w-4" /> Logout
+            </Button>
+          </div>
         </header>
 
         <main className="mx-auto max-w-6xl p-4 md:p-8 space-y-6">
@@ -587,6 +592,12 @@ const Dashboard = () => {
                         <span className="text-muted-foreground">Loading Charges:</span>
                         <span className="font-semibold">₹{(siteCalc.issueLoadingCharges + siteCalc.returnLoadingCharges).toLocaleString("en-IN")}</span>
                       </div>
+                      {siteCalc.transportCharges > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Transportation Charges:</span>
+                          <span className="font-semibold">₹{siteCalc.transportCharges.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
                       {siteCalc.penaltyAmount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Late Penalty:</span>
@@ -744,9 +755,12 @@ const Dashboard = () => {
           <HardHat className="h-7 w-7 text-accent" />
           <h1 className="text-lg font-bold text-primary-foreground">Material Rental Pro</h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
-          <LogOut className="mr-1 h-4 w-4" /> Logout
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
+            <LogOut className="mr-1 h-4 w-4" /> Logout
+          </Button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl p-4 md:p-8 space-y-8">

@@ -221,7 +221,8 @@ export async function issueMaterials(
     challanNo?: string;
   },
   customLoadingCharge?: number,
-  employeeId?: string
+  employeeId?: string,
+  transportCharges?: number
 ): Promise<boolean> {
   try {
     // Check if enough inventory available
@@ -308,6 +309,7 @@ export async function issueMaterials(
           materialTypeId,
           quantity,
           hasOwnLabor,
+          transportCharges: transportCharges || undefined,
           employeeId
         });
 
@@ -364,6 +366,7 @@ export async function issueMaterials(
             materialTypeId,
             quantity,
             hasOwnLabor,
+            transportCharges: transportCharges || undefined,
             employeeId
           }
         ];
@@ -409,7 +412,9 @@ export async function issueMaterials(
             issueDate,
             originalRentCharge: rentCharge,
             originalIssueLC: issueLC,
-            amountPaid: initialAmountPaid
+            amountPaid: initialAmountPaid,
+            vehicleNo: shippingDetails?.vehicleNo,
+            challanNo: shippingDetails?.challanNo
           },
           [{
             materialTypeId,
@@ -433,6 +438,7 @@ export async function issueMaterials(
           materialTypeId,
           quantity,
           hasOwnLabor,
+          transportCharges: transportCharges || undefined,
           employeeId
         }
       ];
@@ -452,6 +458,7 @@ export async function issueMaterials(
           name,
           registrationName: clientDetails?.registrationName,
           contactNo: clientDetails?.contactNo,
+          spareContactNo: clientDetails?.spareContactNo,
           aadharPhoto: clientDetails?.aadharPhoto,
           address: clientDetails?.address,
           referral: clientDetails?.referral
@@ -461,7 +468,9 @@ export async function issueMaterials(
           location,
           issueDate,
           originalRentCharge: rentCharge,
-          originalIssueLC: issueLC
+          originalIssueLC: issueLC,
+          vehicleNo: shippingDetails?.vehicleNo,
+          challanNo: shippingDetails?.challanNo
         },
         [{
           materialTypeId,
@@ -554,6 +563,7 @@ export function calculateSiteRent(site: Site): {
   rentAmount: number;
   issueLoadingCharges: number;
   returnLoadingCharges: number;
+  transportCharges: number;
   lostItemsPenalty: number;
   penaltyAmount: number;
   totalRequired: number;
@@ -636,6 +646,29 @@ export function calculateSiteRent(site: Site): {
     }
   });
   
+  // Calculate transportation charges from history
+  // Issue transport charges are part of base charges
+  // Return transport charges are part of new charges
+  const issueTransportCharges = site.history
+    .filter(h => {
+      if (site.lastSettlementDate && h.date <= site.lastSettlementDate) {
+        return false;
+      }
+      return h.action === "Issued" && h.transportCharges;
+    })
+    .reduce((sum, h) => sum + (h.transportCharges || 0), 0);
+    
+  const returnTransportCharges = site.history
+    .filter(h => {
+      if (site.lastSettlementDate && h.date <= site.lastSettlementDate) {
+        return false;
+      }
+      return h.action === "Returned" && h.transportCharges;
+    })
+    .reduce((sum, h) => sum + (h.transportCharges || 0), 0);
+  
+  const transportCharges = issueTransportCharges + returnTransportCharges;
+  
   // Calculate penalty ONLY for materials still held after grace period
   // AND only if grace period charges are not yet paid
   let penaltyAmount = 0;
@@ -681,12 +714,12 @@ export function calculateSiteRent(site: Site): {
     }
   }
   
-  // Calculate base charges
-  const baseCharges = rentAmount + issueLoadingCharges + penaltyAmount;
+  // Calculate base charges (includes issue transport charges)
+  const baseCharges = rentAmount + issueLoadingCharges + issueTransportCharges + penaltyAmount;
   const unpaidBase = Math.max(0, baseCharges - site.amountPaid);
   const overpayment = Math.max(0, site.amountPaid - baseCharges);
   
-  const newCharges = returnLoadingCharges + lostItemsPenalty;
+  const newCharges = returnLoadingCharges + lostItemsPenalty + returnTransportCharges;
   const newChargesAfterOverpayment = Math.max(0, newCharges - overpayment);
   
   const totalRequired = unpaidBase + newChargesAfterOverpayment;
@@ -702,6 +735,7 @@ export function calculateSiteRent(site: Site): {
     rentAmount,
     issueLoadingCharges,
     returnLoadingCharges,
+    transportCharges,
     lostItemsPenalty,
     penaltyAmount,
     totalRequired,

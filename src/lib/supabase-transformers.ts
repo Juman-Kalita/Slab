@@ -60,7 +60,8 @@ export function dbToHistoryEvent(dbEvent: any): HistoryEvent {
     quantityLost: dbEvent.quantity_lost,
     paymentMethod: dbEvent.payment_method,
     paymentScreenshot: dbEvent.payment_screenshot,
-    employeeId: dbEvent.employee_id
+    employeeId: dbEvent.employee_id,
+    transportCharges: dbEvent.transport_charges ? parseFloat(dbEvent.transport_charges) : undefined
   };
 }
 
@@ -91,7 +92,9 @@ export function siteToDb(site: Partial<Site>, customerId: string): any {
     amount_paid: site.amountPaid,
     last_settlement_date: site.lastSettlementDate,
     original_rent_charge: site.originalRentCharge,
-    original_issue_lc: site.originalIssueLC
+    original_issue_lc: site.originalIssueLC,
+    vehicle_no: site.vehicleNo,
+    challan_no: site.challanNo
   };
 }
 
@@ -118,6 +121,7 @@ export function historyEventToDb(event: Partial<HistoryEvent>, siteId: string): 
     quantity_lost: event.quantityLost,
     payment_method: event.paymentMethod,
     payment_screenshot: event.paymentScreenshot,
-    employee_id: event.employeeId
+    employee_id: event.employeeId,
+    transport_charges: event.transportCharges
   };
 }

@@ -209,6 +209,10 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
         // Issue all materials for this site
         for (const material of validMaterials) {
           const qty = parseInt(material.quantity);
+          // Only add transport charges to the first material to avoid duplication
+          const isFirstMaterial = validMaterials.indexOf(material) === 0;
+          const transportCharge = isFirstMaterial && site.transportationCharge ? parseFloat(site.transportationCharge) : undefined;
+          
           const success = await issueMaterials(
             customerName,
             site.siteName,
@@ -231,7 +235,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               challanNo: site.challanNo || undefined,
             },
             material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined,
-            getCurrentUser()?.id
+            getCurrentUser()?.id,
+            transportCharge
           );
           
           if (success) {
