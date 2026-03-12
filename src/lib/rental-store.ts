@@ -265,10 +265,31 @@ export async function issueMaterials(
       );
 
       if (site) {
-        // Calculate rent based on ORIGINAL site issue date, not new materials
-        const daysSinceOriginalIssue = differenceInDays(new Date(issueDate), new Date(site.issueDate));
-        const daysToCharge = Math.max(materialType.gracePeriodDays, daysSinceOriginalIssue);
-        const rentCharge = quantity * materialType.rentPerDay * daysToCharge;
+        // Calculate rent based on grace period end date logic
+        let rentCharge: number;
+        
+        if (site.gracePeriodEndDate) {
+          const newMaterialIssueDate = new Date(issueDate);
+          const gracePeriodEnd = new Date(site.gracePeriodEndDate);
+          
+          if (newMaterialIssueDate <= gracePeriodEnd) {
+            // Scenario 1: Materials issued BEFORE grace period end date
+            // Calculate rent from issue date to grace period end date
+            const daysUntilGraceEnd = differenceInDays(gracePeriodEnd, newMaterialIssueDate);
+            rentCharge = quantity * materialType.rentPerDay * daysUntilGraceEnd;
+          } else {
+            // Scenario 2: Materials issued AFTER grace period end date
+            // Calculate rent per day from issue date onwards (no grace period)
+            // Charge for 1 day minimum (the issue day itself)
+            rentCharge = quantity * materialType.rentPerDay * 1;
+          }
+        } else {
+          // Fallback: Use original logic for backward compatibility
+          const daysSinceOriginalIssue = differenceInDays(new Date(issueDate), new Date(site.issueDate));
+          const daysToCharge = Math.max(materialType.gracePeriodDays, daysSinceOriginalIssue);
+          rentCharge = quantity * materialType.rentPerDay * daysToCharge;
+        }
+        
         const issueLC = hasOwnLabor ? 0 : (customLoadingCharge !== undefined ? customLoadingCharge : quantity * materialType.loadingCharge);
         // Add to existing site
         const existingMaterial = site.materials.find(m => m.materialTypeId === materialTypeId);

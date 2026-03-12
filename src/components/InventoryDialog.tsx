@@ -94,17 +94,17 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
 
             {/* Inventory Table - Scrollable */}
             <div className="border rounded-lg overflow-hidden flex-1">
-              <div className="max-h-[450px] overflow-y-auto">
+              <div className="max-h-[450px] overflow-y-auto relative">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-muted z-10">
+                  <TableHeader className="sticky top-0 bg-muted z-10 shadow-sm">
                     <TableRow>
-                      <TableHead className="bg-muted border-b-2">Category</TableHead>
-                      <TableHead className="bg-muted border-b-2">Material</TableHead>
-                      <TableHead className="bg-muted border-b-2">Size</TableHead>
-                      <TableHead className="text-right bg-muted border-b-2">Total</TableHead>
-                      <TableHead className="text-right bg-muted border-b-2">Available</TableHead>
-                      <TableHead className="text-right bg-muted border-b-2">Issued</TableHead>
-                      <TableHead className="text-right bg-muted border-b-2">Status</TableHead>
+                      <TableHead className="bg-muted border-b-2 border-border">Category</TableHead>
+                      <TableHead className="bg-muted border-b-2 border-border">Material</TableHead>
+                      <TableHead className="bg-muted border-b-2 border-border">Size</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2 border-border">Total</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2 border-border">Available</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2 border-border">Issued</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2 border-border">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

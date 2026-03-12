@@ -544,6 +544,12 @@ const AdminDashboard = () => {
                         <div className="text-right">
                           <div className="text-sm text-muted-foreground">Issue Date</div>
                           <div className="font-medium">{format(new Date(site.issueDate), "dd MMM yyyy")}</div>
+                          {site.gracePeriodEndDate && (
+                            <>
+                              <div className="text-sm text-muted-foreground mt-2">End Date</div>
+                              <div className="font-medium">{format(new Date(site.gracePeriodEndDate), "dd MMM yyyy")}</div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
