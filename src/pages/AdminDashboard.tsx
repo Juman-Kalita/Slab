@@ -732,19 +732,53 @@ const AdminDashboard = () => {
                       <div className="border-t pt-4">
                         <h5 className="font-semibold mb-3">Materials ({totalItems} items)</h5>
                         <div className="space-y-2">
-                          {site.materials.filter(m => m.quantity > 0).map((material) => {
-                            const materialType = getMaterialType(material.materialTypeId);
-                            if (!materialType) return null;
-                            return (
-                              <div key={material.materialTypeId} className="flex justify-between items-center p-2 bg-muted rounded">
-                                <div>
-                                  <span className="font-medium">{materialType.name} ({materialType.size})</span>
-                                  <span className="text-sm text-muted-foreground ml-2">× {material.quantity}</span>
+                          {(() => {
+                            // Group materials by materialTypeId and issueDate from history
+                            const issuedEvents = site.history.filter(h => h.action === "Issued" && h.materialTypeId);
+                            const materialGroups = new Map<string, { materialTypeId: string; issueDate: string; quantity: number; hasOwnLabor: boolean }>();
+                            
+                            issuedEvents.forEach(event => {
+                              if (!event.materialTypeId || !event.quantity) return;
+                              const key = `${event.materialTypeId}-${event.date}`;
+                              const existing = materialGroups.get(key);
+                              if (existing) {
+                                existing.quantity += event.quantity;
+                              } else {
+                                materialGroups.set(key, {
+                                  materialTypeId: event.materialTypeId,
+                                  issueDate: event.date,
+                                  quantity: event.quantity,
+                                  hasOwnLabor: event.hasOwnLabor || false
+                                });
+                              }
+                            });
+                            
+                            // Filter to only show materials that are still at the site
+                            const currentMaterials = site.materials.filter(m => m.quantity > 0);
+                            const materialsToShow = Array.from(materialGroups.values()).filter(group => {
+                              return currentMaterials.some(m => m.materialTypeId === group.materialTypeId);
+                            });
+                            
+                            return materialsToShow.map((group, index) => {
+                              const materialType = getMaterialType(group.materialTypeId);
+                              if (!materialType) return null;
+                              return (
+                                <div key={`${group.materialTypeId}-${group.issueDate}-${index}`} className="flex justify-between items-center p-2 bg-muted rounded">
+                                  <div className="flex-1">
+                                    <span className="font-medium">{materialType.name} ({materialType.size})</span>
+                                    <span className="text-sm text-muted-foreground ml-2">× {group.quantity}</span>
+                                  </div>
+                                  <div className="flex-1 text-center">
+                                    <div className="text-xs text-muted-foreground">Issued</div>
+                                    <div className="text-sm font-medium">{format(new Date(group.issueDate), "dd MMM yyyy")}</div>
+                                  </div>
+                                  <div className="flex-1 text-right">
+                                    <span className="text-sm">₹{materialType.rentPerDay}/day</span>
+                                  </div>
                                 </div>
-                                <span className="text-sm">₹{materialType.rentPerDay}/day</span>
-                              </div>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
                       </div>
                     )}
