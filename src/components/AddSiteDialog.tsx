@@ -126,7 +126,10 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
           0, // No deposit during site addition
           undefined, // No client details
           undefined, // No shipping details
-          line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined
+          line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined,
+          undefined, // No employee ID
+          undefined, // No transport charges
+          undefined  // No grace period end date
         );
         if (success) {
           successCount++;

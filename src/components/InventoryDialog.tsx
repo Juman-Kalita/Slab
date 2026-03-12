@@ -51,7 +51,7 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Inventory Management</DialogTitle>
         </DialogHeader>
@@ -65,103 +65,110 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
           </div>
         ) : (
           <>
-            {/* Summary Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="bg-primary/10 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-primary">{MATERIAL_TYPES.length}</div>
-            <div className="text-xs text-muted-foreground">Total Items</div>
-          </div>
-          <div className="bg-green-500/10 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-green-600">{totalStock}</div>
-            <div className="text-xs text-muted-foreground">In Stock</div>
-          </div>
-          <div className="bg-orange-500/10 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-orange-600">{totalIssued}</div>
-            <div className="text-xs text-muted-foreground">Issued</div>
-          </div>
-        </div>
+            {/* Summary Stats - Sticky */}
+            <div className="grid grid-cols-3 gap-4 mb-4 sticky top-0 bg-background z-20 pb-2">
+              <div className="bg-primary/10 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-primary">{MATERIAL_TYPES.length}</div>
+                <div className="text-xs text-muted-foreground">Total Items</div>
+              </div>
+              <div className="bg-green-500/10 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-green-600">{totalStock}</div>
+                <div className="text-xs text-muted-foreground">In Stock</div>
+              </div>
+              <div className="bg-orange-500/10 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-orange-600">{totalIssued}</div>
+                <div className="text-xs text-muted-foreground">Issued</div>
+              </div>
+            </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search materials..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+            {/* Search - Sticky */}
+            <div className="relative mb-4 sticky top-[88px] bg-background z-20 pb-2">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search materials..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
 
-        {/* Inventory Table */}
-        <div className="border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Category</TableHead>
-                <TableHead>Material</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Available</TableHead>
-                <TableHead className="text-right">Issued</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {categories.map((category) => {
-                const categoryMaterials = filteredMaterials.filter(m => m.category === category);
-                if (categoryMaterials.length === 0) return null;
+            {/* Inventory Table - Scrollable */}
+            <div className="border rounded-lg overflow-hidden flex-1">
+              {/* Fixed Header */}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="bg-muted">Category</TableHead>
+                    <TableHead className="bg-muted">Material</TableHead>
+                    <TableHead className="bg-muted">Size</TableHead>
+                    <TableHead className="text-right bg-muted">Total</TableHead>
+                    <TableHead className="text-right bg-muted">Available</TableHead>
+                    <TableHead className="text-right bg-muted">Issued</TableHead>
+                    <TableHead className="text-right bg-muted">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+              </Table>
+              
+              {/* Scrollable Body */}
+              <div className="max-h-[400px] overflow-y-auto">
+                <Table>
+                  <TableBody>
+                    {categories.map((category) => {
+                      const categoryMaterials = filteredMaterials.filter(m => m.category === category);
+                      if (categoryMaterials.length === 0) return null;
 
-                return categoryMaterials.map((material, index) => {
-                  const available = inventory[material.id] || 0;
-                  const issued = material.inventory - available;
-                  const percentage = material.inventory > 0 ? (available / material.inventory) * 100 : 0;
+                      return categoryMaterials.map((material, index) => {
+                        const available = inventory[material.id] || 0;
+                        const issued = material.inventory - available;
+                        const percentage = material.inventory > 0 ? (available / material.inventory) * 100 : 0;
 
-                  return (
-                    <TableRow key={material.id}>
-                      {index === 0 && (
-                        <TableCell 
-                          rowSpan={categoryMaterials.length} 
-                          className="font-semibold bg-muted/30 align-top"
-                        >
-                          {category}
+                        return (
+                          <TableRow key={material.id}>
+                            {index === 0 && (
+                              <TableCell 
+                                rowSpan={categoryMaterials.length} 
+                                className="font-semibold bg-muted/30 align-top"
+                              >
+                                {category}
+                              </TableCell>
+                            )}
+                            <TableCell className="font-medium">{material.name}</TableCell>
+                            <TableCell className="text-muted-foreground">{material.size || "-"}</TableCell>
+                            <TableCell className="text-right">{material.inventory}</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              <span className={
+                                available === 0 ? "text-red-600" :
+                                percentage < 20 ? "text-orange-600" :
+                                "text-green-600"
+                              }>
+                                {available}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">{issued}</TableCell>
+                            <TableCell className="text-right">
+                              {available === 0 ? (
+                                <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Out of Stock</span>
+                              ) : percentage < 20 ? (
+                                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Low Stock</span>
+                              ) : (
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">In Stock</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                    })}
+                    {filteredMaterials.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No materials found
                         </TableCell>
-                      )}
-                      <TableCell className="font-medium">{material.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{material.size || "-"}</TableCell>
-                      <TableCell className="text-right">{material.inventory}</TableCell>
-                      <TableCell className="text-right font-semibold">
-                        <span className={
-                          available === 0 ? "text-red-600" :
-                          percentage < 20 ? "text-orange-600" :
-                          "text-green-600"
-                        }>
-                          {available}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">{issued}</TableCell>
-                      <TableCell className="text-right">
-                        {available === 0 ? (
-                          <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Out of Stock</span>
-                        ) : percentage < 20 ? (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Low Stock</span>
-                        ) : (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">In Stock</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                });
-              })}
-              {filteredMaterials.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No materials found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </>
         )}
       </DialogContent>

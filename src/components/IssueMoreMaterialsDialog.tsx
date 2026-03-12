@@ -119,7 +119,10 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
           0,
           undefined,
           undefined,
-          line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined
+          line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined,
+          undefined, // No employee ID
+          undefined, // No transport charges
+          undefined  // No grace period end date
         );
         if (success) {
           successCount++;

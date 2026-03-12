@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { getCustomers } from "@/lib/rental-store";
+import { getCustomers, deleteCustomer } from "@/lib/rental-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Edit, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { getCurrentUser, logActivity } from "@/lib/auth-service";
 import CustomerEditDialog from "./CustomerEditDialog";
 import type { Customer } from "@/lib/rental-store";
 
@@ -53,12 +54,56 @@ const CustomerManagement = () => {
   };
 
   const handleDelete = async (customer: Customer) => {
-    if (!confirm(`Are you sure you want to delete ${customer.name}? This action cannot be undone.`)) {
+    const totalMaterials = getTotalMaterials(customer);
+    const totalPending = getTotalPending(customer);
+    
+    // Build confirmation message
+    let confirmMessage = `Are you sure you want to delete customer "${customer.name}"?\n\n`;
+    confirmMessage += `This will:\n`;
+    confirmMessage += `- Delete ${customer.sites.length} site(s)\n`;
+    if (totalMaterials > 0) {
+      confirmMessage += `- Return ${totalMaterials} material(s) to inventory\n`;
+    }
+    if (totalPending > 0) {
+      confirmMessage += `- Clear ₹${totalPending.toLocaleString("en-IN")} pending amount\n`;
+    }
+    confirmMessage += `\nThis action CANNOT be undone!`;
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
-    // TODO: Implement delete functionality
-    toast.error("Delete functionality coming soon");
+    try {
+      const success = await deleteCustomer(customer.id);
+      
+      if (success) {
+        toast.success(`Customer "${customer.name}" deleted successfully`);
+        
+        // Log activity
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          await logActivity(
+            currentUser.id,
+            'delete_customer',
+            'customer',
+            customer.id,
+            { 
+              customerName: customer.name,
+              sitesDeleted: customer.sites.length,
+              materialsRestored: totalMaterials
+            }
+          );
+        }
+        
+        // Reload customers
+        await loadCustomers();
+      } else {
+        toast.error("Failed to delete customer");
+      }
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      toast.error("An error occurred while deleting customer");
+    }
   };
 
   const getTotalMaterials = (customer: Customer) => {
@@ -131,9 +176,13 @@ const CustomerManagement = () => {
                       <TableCell>
                         <div className="text-sm">
                           {customer.contactNo || "N/A"}
-                          {customer.spareContactNo && (
-                            <div className="text-xs text-muted-foreground">
-                              Alt: {customer.spareContactNo}
+                          {customer.contacts && customer.contacts.length > 0 && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {customer.contacts.map((contact, idx) => (
+                                <div key={idx}>
+                                  {contact.name}: {contact.number}
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>

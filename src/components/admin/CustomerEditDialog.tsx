@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Edit, Trash2, Save } from "lucide-react";
-import { updateCustomer, updateSite, updateMaterialQuantity, deleteSite, updateAdvanceDeposit, updateSitePayment } from "@/lib/supabase-store";
-import { getMaterialType } from "@/lib/rental-store";
+import { Edit, Trash2, Save, Plus } from "lucide-react";
+import { updateCustomer, updateSite, updateMaterialQuantity, updateAdvanceDeposit, updateSitePayment } from "@/lib/supabase-store";
+import { getMaterialType, deleteSite } from "@/lib/rental-store";
 import { getCurrentUser, logActivity } from "@/lib/auth-service";
 import type { Customer } from "@/lib/rental-store";
 
@@ -28,7 +28,7 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
   const [name, setName] = useState(customer.name);
   const [registrationName, setRegistrationName] = useState(customer.registrationName || "");
   const [contactNo, setContactNo] = useState(customer.contactNo || "");
-  const [spareContactNo, setSpareContactNo] = useState(customer.spareContactNo || "");
+  const [contacts, setContacts] = useState<Array<{ name: string; number: string }>>(customer.contacts || []);
   const [address, setAddress] = useState(customer.address || "");
   const [advanceDeposit, setAdvanceDeposit] = useState(customer.advanceDeposit.toString());
 
@@ -57,7 +57,7 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
       name: name.trim(),
       registrationName: registrationName.trim() || undefined,
       contactNo: contactNo.trim() || undefined,
-      spareContactNo: spareContactNo.trim() || undefined,
+      contacts: contacts.filter(c => c.name && c.number.length === 10),
       address: address.trim() || undefined,
     });
 
@@ -127,17 +127,31 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
   };
 
   const handleDeleteSite = async (siteId: string, siteName: string) => {
-    if (!confirm(`Are you sure you want to delete site "${siteName}"? This will remove all materials and history for this site.`)) {
+    const site = customer.sites.find(s => s.id === siteId);
+    const totalMaterials = site?.materials.reduce((sum, m) => sum + m.quantity, 0) || 0;
+    
+    let confirmMessage = `Are you sure you want to delete site "${siteName}"?\n\n`;
+    confirmMessage += `This will:\n`;
+    if (totalMaterials > 0) {
+      confirmMessage += `- Return ${totalMaterials} material(s) to inventory\n`;
+    }
+    confirmMessage += `- Remove all history for this site\n`;
+    confirmMessage += `\nThis action CANNOT be undone!`;
+    
+    if (!confirm(confirmMessage)) {
       return;
     }
 
     setSaving(true);
-    const success = await deleteSite(siteId);
+    const success = await deleteSite(customer.id, siteId);
 
     if (success) {
-      toast.success("Site deleted successfully");
+      toast.success(`Site deleted and ${totalMaterials} materials restored to inventory`);
       if (currentUser) {
-        await logActivity(currentUser.id, 'delete_site', 'site', siteId, { siteName });
+        await logActivity(currentUser.id, 'delete_site', 'site', siteId, { 
+          siteName,
+          materialsRestored: totalMaterials
+        });
       }
       onSuccess();
     } else {
@@ -254,13 +268,57 @@ const CustomerEditDialog = ({ customer, open, onOpenChange, onSuccess }: Custome
                       onChange={(e) => setContactNo(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="spareContactNo">Spare Contact</Label>
-                    <Input
-                      id="spareContactNo"
-                      value={spareContactNo}
-                      onChange={(e) => setSpareContactNo(e.target.value)}
-                    />
+                  <div className="space-y-2 col-span-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Additional Contacts</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setContacts([...contacts, { name: "", number: "" }])}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Contact
+                      </Button>
+                    </div>
+                    {contacts.map((contact, index) => (
+                      <div key={index} className="flex gap-2 items-start">
+                        <div className="flex-1">
+                          <Input
+                            placeholder="Contact name"
+                            value={contact.name}
+                            onChange={(e) => {
+                              const newContacts = [...contacts];
+                              newContacts[index].name = e.target.value;
+                              setContacts(newContacts);
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <Input
+                            placeholder="10-digit number"
+                            value={contact.number}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              if (value.length <= 10) {
+                                const newContacts = [...contacts];
+                                newContacts[index].number = value;
+                                setContacts(newContacts);
+                              }
+                            }}
+                            maxLength={10}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setContacts(contacts.filter((_, i) => i !== index))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                   <div className="space-y-2 col-span-2">
                     <Label htmlFor="address">Address</Label>

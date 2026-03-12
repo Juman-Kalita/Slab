@@ -642,8 +642,8 @@ const AdminDashboard = () => {
                       )}
                       {siteCalc.penaltyAmount > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Late Penalty:</span>
-                          <span className="font-semibold text-red-600">₹{siteCalc.penaltyAmount.toLocaleString("en-IN")}</span>
+                          <span className="text-muted-foreground">Additional Rent (After Grace Period):</span>
+                          <span className="font-semibold">₹{siteCalc.penaltyAmount.toLocaleString("en-IN")}</span>
                         </div>
                       )}
                       {siteCalc.lostItemsPenalty > 0 && (
@@ -652,10 +652,6 @@ const AdminDashboard = () => {
                           <span className="font-semibold text-red-600">₹{siteCalc.lostItemsPenalty.toLocaleString("en-IN")}</span>
                         </div>
                       )}
-                      <div className="flex justify-between pt-2 border-t">
-                        <span className="font-medium">Amount Deposited:</span>
-                        <span className="font-semibold text-green-600">₹{site.amountPaid.toLocaleString("en-IN")}</span>
-                      </div>
                       <div className="flex justify-between pt-2 border-t">
                         <span className="font-medium">Remaining Due:</span>
                         <span className="font-bold text-lg text-accent">₹{siteCalc.remainingDue.toLocaleString("en-IN")}</span>

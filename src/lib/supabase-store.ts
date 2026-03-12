@@ -37,7 +37,7 @@ export async function createCustomerWithSite(
     name: string;
     registrationName?: string;
     contactNo?: string;
-    spareContactNo?: string;
+    contacts?: Array<{ name: string; number: string }>;
     aadharPhoto?: string;
     address?: string;
     referral?: string;
@@ -50,6 +50,7 @@ export async function createCustomerWithSite(
     originalIssueLC: number;
     vehicleNo?: string;
     challanNo?: string;
+    gracePeriodEndDate?: string;
   },
   materials: Array<{
     materialTypeId: string;
@@ -75,7 +76,7 @@ export async function createCustomerWithSite(
       name: customerData.name,
       registrationName: customerData.registrationName,
       contactNo: customerData.contactNo,
-      spareContactNo: customerData.spareContactNo,
+      contacts: customerData.contacts,
       aadharPhoto: customerData.aadharPhoto,
       address: customerData.address,
       referral: customerData.referral,
@@ -137,6 +138,7 @@ export async function addSiteToCustomer(
     amountPaid?: number;
     vehicleNo?: string;
     challanNo?: string;
+    gracePeriodEndDate?: string;
   },
   materials: Array<{
     materialTypeId: string;
@@ -168,9 +170,6 @@ export async function addSiteToCustomer(
       originalIssueLC: siteData.originalIssueLC,
       vehicleNo: siteData.vehicleNo,
       challanNo: siteData.challanNo
-    }, customerId))
-      originalRentCharge: siteData.originalRentCharge,
-      originalIssueLC: siteData.originalIssueLC
     }, customerId))
     .select()
     .single();
@@ -455,7 +454,7 @@ export async function updateCustomer(
     name?: string;
     registrationName?: string;
     contactNo?: string;
-    spareContactNo?: string;
+    contacts?: Array<{ name: string; number: string }>;
     address?: string;
     referral?: string;
     aadharPhoto?: string;
@@ -466,7 +465,7 @@ export async function updateCustomer(
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.registrationName !== undefined) updateData.registration_name = updates.registrationName;
     if (updates.contactNo !== undefined) updateData.contact_no = updates.contactNo;
-    if (updates.spareContactNo !== undefined) updateData.spare_contact_no = updates.spareContactNo;
+    if (updates.contacts !== undefined) updateData.contacts = JSON.stringify(updates.contacts);
     if (updates.address !== undefined) updateData.address = updates.address;
     if (updates.referral !== undefined) updateData.referral = updates.referral;
     if (updates.aadharPhoto !== undefined) updateData.aadhar_photo = updates.aadharPhoto;

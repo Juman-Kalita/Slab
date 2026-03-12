@@ -125,6 +125,7 @@ export interface Site {
   siteName: string; // Name of the construction site
   location: string; // Location/region of the site
   issueDate: string; // When materials were first issued to this site
+  gracePeriodEndDate?: string; // End date of grace period (optional, if not set uses material type grace period)
   materials: MaterialItem[]; // Materials at this site
   amountPaid: number; // Amount paid for this site
   lastSettlementDate: string | null;
@@ -141,8 +142,8 @@ export interface Customer {
   id: string;
   name: string;
   registrationName?: string; // Official registration name
-  contactNo?: string; // Contact number
-  spareContactNo?: string; // Spare contact number
+  contactNo?: string; // Primary contact number
+  contacts?: Array<{ name: string; number: string }>; // Multiple contacts with names
   aadharPhoto?: string; // Base64 encoded Aadhar photo
   address?: string; // Address
   referral?: string; // Referral source (who referred this customer)
@@ -211,7 +212,7 @@ export async function issueMaterials(
   clientDetails?: {
     registrationName?: string;
     contactNo?: string;
-    spareContactNo?: string;
+    contacts?: Array<{ name: string; number: string }>;
     aadharPhoto?: string;
     address?: string;
     referral?: string;
@@ -222,7 +223,8 @@ export async function issueMaterials(
   },
   customLoadingCharge?: number,
   employeeId?: string,
-  transportCharges?: number
+  transportCharges?: number,
+  gracePeriodEndDate?: string
 ): Promise<boolean> {
   try {
     // Check if enough inventory available
@@ -414,7 +416,8 @@ export async function issueMaterials(
             originalIssueLC: issueLC,
             amountPaid: initialAmountPaid,
             vehicleNo: shippingDetails?.vehicleNo,
-            challanNo: shippingDetails?.challanNo
+            challanNo: shippingDetails?.challanNo,
+            gracePeriodEndDate
           },
           [{
             materialTypeId,
@@ -458,7 +461,7 @@ export async function issueMaterials(
           name,
           registrationName: clientDetails?.registrationName,
           contactNo: clientDetails?.contactNo,
-          spareContactNo: clientDetails?.spareContactNo,
+          contacts: clientDetails?.contacts,
           aadharPhoto: clientDetails?.aadharPhoto,
           address: clientDetails?.address,
           referral: clientDetails?.referral
@@ -470,7 +473,8 @@ export async function issueMaterials(
           originalRentCharge: rentCharge,
           originalIssueLC: issueLC,
           vehicleNo: shippingDetails?.vehicleNo,
-          challanNo: shippingDetails?.challanNo
+          challanNo: shippingDetails?.challanNo,
+          gracePeriodEndDate
         },
         [{
           materialTypeId,
@@ -580,29 +584,43 @@ export function calculateSiteRent(site: Site): {
 } {
   const days = differenceInDays(new Date(), new Date(site.issueDate));
   
-  // Determine max grace period from materials at this site
-  let maxGracePeriod = 20;
-  site.materials.forEach(m => {
-    const mt = getMaterialType(m.materialTypeId);
-    if (mt && mt.gracePeriodDays > maxGracePeriod) {
-      maxGracePeriod = mt.gracePeriodDays;
-    }
-  });
+  // Calculate grace period based on gracePeriodEndDate if provided
+  let gracePeriodDays: number;
+  let isWithinGracePeriod: boolean;
+  let daysOverdue: number;
   
-  // If no materials left, check history for grace period
-  if (site.materials.length === 0) {
-    site.history.filter(h => h.action === "Issued").forEach(h => {
-      if (h.materialTypeId) {
-        const mt = getMaterialType(h.materialTypeId);
-        if (mt && mt.gracePeriodDays > maxGracePeriod) {
-          maxGracePeriod = mt.gracePeriodDays;
-        }
+  if (site.gracePeriodEndDate) {
+    // Use the explicit grace period end date
+    gracePeriodDays = differenceInDays(new Date(site.gracePeriodEndDate), new Date(site.issueDate));
+    const daysFromIssue = differenceInDays(new Date(), new Date(site.issueDate));
+    isWithinGracePeriod = new Date() <= new Date(site.gracePeriodEndDate);
+    daysOverdue = Math.max(0, differenceInDays(new Date(), new Date(site.gracePeriodEndDate)));
+  } else {
+    // Fallback to material type grace period (for backward compatibility)
+    let maxGracePeriod = 20;
+    site.materials.forEach(m => {
+      const mt = getMaterialType(m.materialTypeId);
+      if (mt && mt.gracePeriodDays > maxGracePeriod) {
+        maxGracePeriod = mt.gracePeriodDays;
       }
     });
+    
+    // If no materials left, check history for grace period
+    if (site.materials.length === 0) {
+      site.history.filter(h => h.action === "Issued").forEach(h => {
+        if (h.materialTypeId) {
+          const mt = getMaterialType(h.materialTypeId);
+          if (mt && mt.gracePeriodDays > maxGracePeriod) {
+            maxGracePeriod = mt.gracePeriodDays;
+          }
+        }
+      });
+    }
+    
+    gracePeriodDays = maxGracePeriod;
+    isWithinGracePeriod = days <= maxGracePeriod;
+    daysOverdue = Math.max(0, days - maxGracePeriod);
   }
-  
-  const isWithinGracePeriod = days <= maxGracePeriod;
-  const daysOverdue = Math.max(0, days - maxGracePeriod);
   
   let returnLoadingCharges = 0;
   let lostItemsPenalty = 0;
@@ -669,52 +687,19 @@ export function calculateSiteRent(site: Site): {
   
   const transportCharges = issueTransportCharges + returnTransportCharges;
   
-  // Calculate penalty ONLY for materials still held after grace period
-  // AND only if grace period charges are not yet paid
+  // Calculate additional rent after grace period
   let penaltyAmount = 0;
-  
-  // If all materials are returned, check if they were returned within grace period
-  const allMaterialsReturned = site.materials.every(m => m.quantity === 0);
-  
-  if (allMaterialsReturned) {
-    // Find the last return date
-    const returnEvents = site.history.filter(h => h.action === "Returned");
-    if (returnEvents.length > 0) {
-      const lastReturnDate = new Date(Math.max(...returnEvents.map(e => new Date(e.date).getTime())));
-      const daysUntilReturn = differenceInDays(lastReturnDate, new Date(site.issueDate));
-      
-      // Only apply penalty if materials were returned AFTER grace period
-      // AND grace period charges were not paid
-      if (daysUntilReturn > maxGracePeriod) {
-        const gracePeriodCharges = rentAmount + issueLoadingCharges;
-        const isPaidForGracePeriod = site.amountPaid >= gracePeriodCharges;
-        
-        if (!isPaidForGracePeriod) {
-          const totalInitialItems = site.history
-            .filter(h => h.action === "Issued")
-            .reduce((sum, h) => sum + (h.quantity || 0), 0);
-          
-          const daysOverdueUntilReturn = daysUntilReturn - maxGracePeriod;
-          penaltyAmount = daysOverdueUntilReturn * totalInitialItems * PENALTY_PER_ITEM_PER_DAY;
-        }
+  if (daysOverdue > 0) {
+    // For each material currently at site, charge daily rate × quantity × days overdue
+    site.materials.forEach(material => {
+      const materialType = getMaterialType(material.materialTypeId);
+      if (materialType) {
+        penaltyAmount += material.quantity * materialType.rentPerDay * daysOverdue;
       }
-      // If returned within grace period, penalty is 0
-    }
-  } else {
-    // Materials still held after grace period
-    // Only charge penalty if grace period charges are NOT yet paid
-    if (daysOverdue > 0) {
-      const gracePeriodCharges = rentAmount + issueLoadingCharges;
-      const isPaidForGracePeriod = site.amountPaid >= gracePeriodCharges;
-      
-      if (!isPaidForGracePeriod) {
-        const currentlyHeldItems = site.materials.reduce((sum, m) => sum + m.quantity, 0);
-        penaltyAmount = daysOverdue * currentlyHeldItems * PENALTY_PER_ITEM_PER_DAY;
-      }
-    }
+    });
   }
   
-  // Calculate base charges (includes issue transport charges)
+  // Calculate base charges (includes issue transport charges and additional rent after grace period)
   const baseCharges = rentAmount + issueLoadingCharges + issueTransportCharges + penaltyAmount;
   const unpaidBase = Math.max(0, baseCharges - site.amountPaid);
   const overpayment = Math.max(0, site.amountPaid - baseCharges);
@@ -926,6 +911,50 @@ export async function deleteCustomer(customerId: string): Promise<boolean> {
     return deleted;
   } catch (error) {
     console.error('Error deleting customer:', error);
+    return false;
+  }
+}
+
+// Delete site and restore inventory
+export async function deleteSite(customerId: string, siteId: string): Promise<boolean> {
+  try {
+    const customers = await getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    
+    if (!customer) {
+      console.error('Customer not found');
+      return false;
+    }
+
+    const site = customer.sites.find(s => s.id === siteId);
+    
+    if (!site) {
+      console.error('Site not found');
+      return false;
+    }
+
+    // Restore all materials from this site back to inventory
+    for (const material of site.materials) {
+      if (material.quantity > 0) {
+        // Add materials back to inventory
+        const restored = await updateInventory(material.materialTypeId, material.quantity);
+        if (!restored) {
+          console.error(`Failed to restore ${material.quantity} of ${material.materialTypeId}`);
+        }
+      }
+    }
+
+    // Delete site from database
+    const deleted = await SupabaseStore.deleteSite(siteId);
+    
+    if (deleted) {
+      const totalRestored = site.materials.reduce((sum, m) => sum + m.quantity, 0);
+      console.log(`Site ${site.siteName} deleted and ${totalRestored} items restored to inventory`);
+    }
+    
+    return deleted;
+  } catch (error) {
+    console.error('Error deleting site:', error);
     return false;
   }
 }

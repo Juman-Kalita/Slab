@@ -37,6 +37,7 @@ interface SiteLine {
 const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsDialogProps) => {
   const [customerName, setCustomerName] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [gracePeriodEndDate, setGracePeriodEndDate] = useState("");
   const [siteLines, setSiteLines] = useState<SiteLine[]>([
     {
       id: crypto.randomUUID(),
@@ -54,7 +55,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
   // Client details (for new customers)
   const [registrationName, setRegistrationName] = useState("");
   const [contactNo, setContactNo] = useState("");
-  const [spareContactNo, setSpareContactNo] = useState("");
+  const [contacts, setContacts] = useState<Array<{ name: string; number: string }>>([]);
   const [aadharPhoto, setAadharPhoto] = useState<string>("");
   const [address, setAddress] = useState("");
   const [referral, setReferral] = useState("");
@@ -225,7 +226,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             {
               registrationName: registrationName || undefined,
               contactNo: contactNo || undefined,
-              spareContactNo: spareContactNo || undefined,
+              contacts: contacts.filter(c => c.name && c.number.length === 10),
               aadharPhoto: aadharPhoto || undefined,
               address: address || undefined,
               referral: referral || undefined,
@@ -236,7 +237,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             },
             material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined,
             getCurrentUser()?.id,
-            transportCharge
+            transportCharge,
+            gracePeriodEndDate || undefined
           );
           
           if (success) {
@@ -257,11 +259,12 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       setCustomerName("");
       setRegistrationName("");
       setContactNo("");
-      setSpareContactNo("");
+      setContacts([]);
       setAadharPhoto("");
       setAddress("");
       setReferral("");
       setIssueDate(new Date().toISOString().split("T")[0]);
+      setGracePeriodEndDate("");
       setSiteLines([{
         id: crypto.randomUUID(),
         siteName: "",
@@ -306,14 +309,30 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="issueDate">Issue Date</Label>
-            <Input
-              id="issueDate"
-              type="date"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="issueDate">Issue Date (Grace Period Start)</Label>
+              <Input
+                id="issueDate"
+                type="date"
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gracePeriodEndDate">End Date (Grace Period End)</Label>
+              <Input
+                id="gracePeriodEndDate"
+                type="date"
+                value={gracePeriodEndDate}
+                onChange={(e) => setGracePeriodEndDate(e.target.value)}
+                min={issueDate}
+              />
+              <p className="text-xs text-muted-foreground">
+                After this date, additional rent charges apply daily
+              </p>
+            </div>
           </div>
 
           {/* Client Details Section */}
@@ -355,25 +374,59 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="spareContactNo">Spare Contact Number (Optional)</Label>
-                <Input
-                  id="spareContactNo"
-                  placeholder="10-digit phone number"
-                  value={spareContactNo}
-                  onChange={(e) => {
-                    // Only allow numbers
-                    const value = e.target.value.replace(/\D/g, '');
-                    // Limit to 10 digits
-                    if (value.length <= 10) {
-                      setSpareContactNo(value);
-                    }
-                  }}
-                  maxLength={10}
-                  pattern="[0-9]{10}"
-                />
-                {spareContactNo && spareContactNo.length !== 10 && spareContactNo.length > 0 && (
-                  <p className="text-xs text-red-600">Phone number must be exactly 10 digits</p>
-                )}
+                <div className="flex items-center justify-between">
+                  <Label>Additional Contacts (Optional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setContacts([...contacts, { name: "", number: "" }])}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Contact
+                  </Button>
+                </div>
+                {contacts.map((contact, index) => (
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-1">
+                      <Input
+                        placeholder="Contact name"
+                        value={contact.name}
+                        onChange={(e) => {
+                          const newContacts = [...contacts];
+                          newContacts[index].name = e.target.value;
+                          setContacts(newContacts);
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Input
+                        placeholder="10-digit number"
+                        value={contact.number}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          if (value.length <= 10) {
+                            const newContacts = [...contacts];
+                            newContacts[index].number = value;
+                            setContacts(newContacts);
+                          }
+                        }}
+                        maxLength={10}
+                      />
+                      {contact.number && contact.number.length !== 10 && contact.number.length > 0 && (
+                        <p className="text-xs text-red-600">Must be 10 digits</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setContacts(contacts.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
 

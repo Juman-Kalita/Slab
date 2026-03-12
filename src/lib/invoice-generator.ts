@@ -172,17 +172,18 @@ export function generateInvoice(data: InvoiceData): void {
     ]);
   }
   
-  // Penalties
+  // Daily penalty after grace period
   if (data.penaltyAmount > 0) {
     tableData.push([
       itemNo++,
-      `Late Penalty (${data.daysOverdue} days overdue)`,
+      `Additional Rent (${data.daysOverdue} days after grace period)`,
       "-",
       "-",
       `Rs.${data.penaltyAmount.toFixed(2)}`
     ]);
   }
   
+  // Lost items penalty only (no late penalties)
   if (data.lostItemsPenalty > 0) {
     tableData.push([
       itemNo++,
@@ -193,7 +194,7 @@ export function generateInvoice(data: InvoiceData): void {
     ]);
   }
   
-  // Calculate subtotal
+  // Calculate subtotal (includes penalties)
   const subtotal = data.rentAmount + data.issueLoadingCharges + data.returnLoadingCharges + 
                    data.transportCharges + data.penaltyAmount + data.lostItemsPenalty;
   
@@ -302,10 +303,18 @@ export function generateInvoice(data: InvoiceData): void {
   doc.text("Terms & Condition", middleX, bottomY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  const gracePeriod = data.materialBreakdown[0]?.materialType.gracePeriodDays || 30;
-  doc.text(`Grace period: ${gracePeriod} days from issue date.`, middleX, bottomY + 7);
-  doc.text("Late penalty: Rs.10 per item per day", middleX, bottomY + 13);
-  doc.text("after grace period.", middleX, bottomY + 18);
+  
+  if (data.site.gracePeriodEndDate) {
+    const endDate = format(new Date(data.site.gracePeriodEndDate), "dd MMM yyyy");
+    doc.text(`Grace period ends: ${endDate}`, middleX, bottomY + 7);
+  } else {
+    const gracePeriod = data.materialBreakdown[0]?.materialType.gracePeriodDays || 30;
+    doc.text(`Grace period: ${gracePeriod} days from issue date.`, middleX, bottomY + 7);
+  }
+  
+  doc.text("After grace period, rent continues daily.", middleX, bottomY + 13);
+  doc.text("Lost/damaged items will be charged", middleX, bottomY + 19);
+  doc.text("as per material rates.", middleX, bottomY + 24);
   
   // Right Column - Owner Signature
   doc.setFont("helvetica", "bold");
