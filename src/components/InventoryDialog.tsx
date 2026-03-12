@@ -94,24 +94,19 @@ const InventoryDialog = ({ open, onOpenChange }: InventoryDialogProps) => {
 
             {/* Inventory Table - Scrollable */}
             <div className="border rounded-lg overflow-hidden flex-1">
-              {/* Fixed Header */}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="bg-muted">Category</TableHead>
-                    <TableHead className="bg-muted">Material</TableHead>
-                    <TableHead className="bg-muted">Size</TableHead>
-                    <TableHead className="text-right bg-muted">Total</TableHead>
-                    <TableHead className="text-right bg-muted">Available</TableHead>
-                    <TableHead className="text-right bg-muted">Issued</TableHead>
-                    <TableHead className="text-right bg-muted">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-              </Table>
-              
-              {/* Scrollable Body */}
-              <div className="max-h-[400px] overflow-y-auto">
+              <div className="max-h-[450px] overflow-y-auto">
                 <Table>
+                  <TableHeader className="sticky top-0 bg-muted z-10">
+                    <TableRow>
+                      <TableHead className="bg-muted border-b-2">Category</TableHead>
+                      <TableHead className="bg-muted border-b-2">Material</TableHead>
+                      <TableHead className="bg-muted border-b-2">Size</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2">Total</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2">Available</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2">Issued</TableHead>
+                      <TableHead className="text-right bg-muted border-b-2">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {categories.map((category) => {
                       const categoryMaterials = filteredMaterials.filter(m => m.category === category);
