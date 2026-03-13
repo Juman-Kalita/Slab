@@ -68,14 +68,14 @@ export const MATERIAL_TYPES: MaterialType[] = [
   
   // C CHANNEL Category - 30 Days
   { id: "c-channel-3-5m", category: "C Channel", name: "C Channel 3\"", size: "5m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "c-channel-3-6m", category: "C Channel", name: "C Channel 3\"", size: "6m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 16 },
-  { id: "c-channel-4-3m", category: "C Channel", name: "C Channel 4\"", size: "3m", rentPerDay: 0, monthlyRate: 150, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "c-channel-3-6m", category: "C Channel", name: "C Channel 3\"", size: "6m", rentPerDay: 0, monthlyRate: 120, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 16 },
+  { id: "c-channel-4-3m", category: "C Channel", name: "C Channel 4\"", size: "3m", rentPerDay: 0, monthlyRate: 60, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   { id: "c-channel-4-5m", category: "C Channel", name: "C Channel 4\"", size: "5m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 11 },
   { id: "c-channel-4-6m", category: "C Channel", name: "C Channel 4\"", size: "6m", rentPerDay: 0, monthlyRate: 300, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // I-SECTION Category - 30 Days
-  { id: "i-section-5-3m", category: "I-Section", name: "I-Section 5\"", size: "3m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 25 },
-  { id: "i-section-5-6m", category: "I-Section", name: "I-Section 5\"", size: "6m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "i-section-5-3m", category: "I-Section", name: "I-Section 5\"", size: "3m", rentPerDay: 0, monthlyRate: 90, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 25 },
+  { id: "i-section-5-6m", category: "I-Section", name: "I-Section 5\"", size: "6m", rentPerDay: 0, monthlyRate: 180, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // ROUND COLUMN Category - 30 Days
   { id: "round-column-9", category: "Round Column", name: "Round Column", size: "9\"", rentPerDay: 0, monthlyRate: 1000, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
@@ -83,10 +83,10 @@ export const MATERIAL_TYPES: MaterialType[] = [
   { id: "round-column-18", category: "Round Column", name: "Round Column", size: "18\"", rentPerDay: 0, monthlyRate: 1800, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 2 },
   
   // EXTRA Category - 30 Days
-  { id: "tie-rod", category: "Extra", name: "Tie Rod", size: "1.2m", rentPerDay: 0.83334, monthlyRate: 25, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "tie-rod", category: "Extra", name: "Tie Rod", size: "1.2m", rentPerDay: 0.83334, monthlyRate: 45, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   { id: "tie-channel-2", category: "Extra", name: "Tie Channel", size: "2'", rentPerDay: 1.5, monthlyRate: 45, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   { id: "tie-channel-4", category: "Extra", name: "Tie Channel", size: "4'", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "anchor-nut", category: "Extra", name: "Anchor Nut", size: "", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "anchor-nut", category: "Extra", name: "Anchor Nut", size: "", rentPerDay: 0, monthlyRate: 20, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // CONCRETING Category - 30 Days
   { id: "electric-mixer", category: "Concreting", name: "Electric Mixer", size: "", rentPerDay: 0, monthlyRate: 1000, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 3 },
