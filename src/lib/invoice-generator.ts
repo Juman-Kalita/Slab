@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import type { Customer, MaterialType, Site } from "./rental-store";
 
 interface InvoiceData {
@@ -122,21 +122,37 @@ export function generateInvoice(data: InvoiceData): void {
   const tableData: any[] = [];
   let itemNo = 1;
   
-  // Calculate days from issue date to now
-  const daysElapsed = Math.max(1, Math.floor((new Date().getTime() - new Date(data.site.issueDate).getTime()) / (1000 * 60 * 60 * 24)));
+  // Calculate days - use grace period end date if available, otherwise use today
+  const endDate = data.site.gracePeriodEndDate ? new Date(data.site.gracePeriodEndDate) : new Date();
+  const issueDate = new Date(data.site.issueDate);
+  const daysElapsed = Math.max(1, differenceInDays(endDate, issueDate) + 1);
   
   // Add material items - use the actual rent amount from data, not recalculated
   data.materialBreakdown.forEach((item) => {
-    // Calculate per-item rent from the total rent amount proportionally
-    const totalInitialQuantity = data.materialBreakdown.reduce((sum, m) => sum + m.initialQuantity, 0);
-    const itemRentPortion = totalInitialQuantity > 0 ? (item.initialQuantity / totalInitialQuantity) * data.rentAmount : 0;
+    // Check if this is first issue and has grace period
+    const isFirstIssue = true; // All materials in invoice are from first issue
+    const useMonthlyRate = isFirstIssue && item.materialType.gracePeriodDays > 0;
+    
+    // Calculate per-item rent
+    let itemRent: number;
+    let description: string;
+    
+    if (useMonthlyRate) {
+      // Use monthly rate for materials with grace period
+      itemRent = item.initialQuantity * item.materialType.monthlyRate;
+      description = `${item.materialType.name} ${item.materialType.size}\n(Monthly rate)`;
+    } else {
+      // Use day calculation for plates (0 grace period)
+      itemRent = item.initialQuantity * item.materialType.rentPerDay * daysElapsed;
+      description = `${item.materialType.name} ${item.materialType.size}\n(${daysElapsed} days rental)`;
+    }
     
     tableData.push([
       itemNo++,
-      `${item.materialType.name} ${item.materialType.size}\n(${daysElapsed} days rental)`,
-      `Rs.${item.materialType.rentPerDay.toFixed(2)}`,
+      description,
+      useMonthlyRate ? `Rs.${item.materialType.monthlyRate.toFixed(2)}/mo` : `Rs.${item.materialType.rentPerDay.toFixed(2)}/day`,
       item.initialQuantity,
-      `Rs.${itemRentPortion.toFixed(2)}`
+      `Rs.${itemRent.toFixed(2)}`
     ]);
   });
   
