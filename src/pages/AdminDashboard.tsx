@@ -49,7 +49,7 @@ import PaymentManagement from "@/components/admin/PaymentManagement";
 import ActivityLog from "@/components/admin/ActivityLog";
 import AdminSettings from "@/components/admin/AdminSettings";
 import FinancialAdjustmentDialog from "@/components/admin/FinancialAdjustmentDialog";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 
 const AdminDashboard = () => {
@@ -762,18 +762,43 @@ const AdminDashboard = () => {
                             return materialsToShow.map((group, index) => {
                               const materialType = getMaterialType(group.materialTypeId);
                               if (!materialType) return null;
+                              
+                              // Calculate days and total
+                              const issueDate = new Date(group.issueDate);
+                              const siteStartDate = new Date(site.issueDate);
+                              const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : new Date();
+                              
+                              // Use inclusive method (+1) only if material was issued AFTER the site start date
+                              const isIssuedAfterStart = issueDate > siteStartDate;
+                              const days = differenceInDays(endDate, issueDate) + (isIssuedAfterStart ? 1 : 0);
+                              const totalAmount = group.quantity * materialType.rentPerDay * days;
+                              
                               return (
-                                <div key={`${group.materialTypeId}-${group.issueDate}-${index}`} className="flex justify-between items-center p-2 bg-muted rounded">
-                                  <div className="flex-1">
-                                    <span className="font-medium">{materialType.name} ({materialType.size})</span>
-                                    <span className="text-sm text-muted-foreground ml-2">× {group.quantity}</span>
+                                <div key={`${group.materialTypeId}-${group.issueDate}-${index}`} className="p-3 bg-muted rounded space-y-2">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="font-medium">{materialType.name} ({materialType.size})</div>
+                                      <div className="text-sm text-muted-foreground">Quantity: {group.quantity}</div>
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                      <div className="text-xs text-muted-foreground">Issued</div>
+                                      <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
+                                      {site.gracePeriodEndDate && (
+                                        <>
+                                          <div className="text-xs text-muted-foreground mt-1">End Date</div>
+                                          <div className="text-sm font-medium">{format(endDate, "dd MMM yyyy")}</div>
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 text-right">
+                                      <div className="text-sm font-semibold">₹{materialType.rentPerDay}/day</div>
+                                    </div>
                                   </div>
-                                  <div className="flex-1 text-center">
-                                    <div className="text-xs text-muted-foreground">Issued</div>
-                                    <div className="text-sm font-medium">{format(new Date(group.issueDate), "dd MMM yyyy")}</div>
-                                  </div>
-                                  <div className="flex-1 text-right">
-                                    <span className="text-sm">₹{materialType.rentPerDay}/day</span>
+                                  <div className="text-xs bg-background p-2 rounded">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Calculation:</span>
+                                      <span className="font-medium">{group.quantity} × ₹{materialType.rentPerDay} × {days} days = ₹{totalAmount.toFixed(2)}</span>
+                                    </div>
                                   </div>
                                 </div>
                               );

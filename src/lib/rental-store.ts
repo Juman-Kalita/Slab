@@ -15,10 +15,10 @@ export interface MaterialType {
 }
 
 export const MATERIAL_TYPES: MaterialType[] = [
-  // PLATES Category - 30 Days
-  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 7500 },
-  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 956 },
-  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 30, inventory: 248 },
+  // PLATES Category - 0 Days Grace Period (Daily calculation)
+  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 7500 },
+  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 956 },
+  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 0, inventory: 248 },
   { id: "change-plate-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1461 },
   { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
   
