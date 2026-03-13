@@ -379,8 +379,11 @@ export async function issueMaterials(
           }
         }
       } else {
-        // Create new site for existing customer - use full grace period
-        const rentCharge = quantity * materialType.rentPerDay * materialType.gracePeriodDays;
+        // Create new site for existing customer
+        // Use monthly rate for materials with grace period, day calculation for plates (0 grace period)
+        const rentCharge = materialType.gracePeriodDays > 0 
+          ? quantity * materialType.monthlyRate 
+          : quantity * materialType.rentPerDay * (gracePeriodEndDate ? differenceInDays(new Date(gracePeriodEndDate), new Date(issueDate)) + 1 : 30);
         const issueLC = hasOwnLabor ? 0 : (customLoadingCharge !== undefined ? customLoadingCharge : quantity * materialType.loadingCharge);
         
         const historyEvents: Array<any> = [
@@ -452,8 +455,11 @@ export async function issueMaterials(
         );
       }
     } else {
-      // Create new customer with first site - use full grace period
-      const rentCharge = quantity * materialType.rentPerDay * materialType.gracePeriodDays;
+      // Create new customer with first site
+      // Use monthly rate for materials with grace period, day calculation for plates (0 grace period)
+      const rentCharge = materialType.gracePeriodDays > 0 
+        ? quantity * materialType.monthlyRate 
+        : quantity * materialType.rentPerDay * (gracePeriodEndDate ? differenceInDays(new Date(gracePeriodEndDate), new Date(issueDate)) + 1 : 30);
       const issueLC = hasOwnLabor ? 0 : (customLoadingCharge !== undefined ? customLoadingCharge : quantity * materialType.loadingCharge);
       
       const historyEvents: Array<any> = [

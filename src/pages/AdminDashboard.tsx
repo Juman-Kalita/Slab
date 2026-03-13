@@ -774,12 +774,12 @@ const AdminDashboard = () => {
                               let totalAmount: number;
                               let calculationText: string;
                               
-                              if (isFirstIssue) {
-                                // For first issue, use monthly rate (no day calculation)
+                              if (isFirstIssue && materialType.gracePeriodDays > 0) {
+                                // For first issue with grace period, use monthly rate (no day calculation)
                                 totalAmount = group.quantity * materialType.monthlyRate;
                                 calculationText = `${group.quantity} × ₹${materialType.monthlyRate}/month = ₹${totalAmount.toFixed(2)}`;
                               } else {
-                                // For subsequent issues, use actual days
+                                // For subsequent issues OR materials with 0 grace period (plates), use actual days
                                 const days = differenceInDays(endDate, issueDate) + 1;
                                 totalAmount = group.quantity * materialType.rentPerDay * days;
                                 calculationText = `${group.quantity} × ₹${materialType.rentPerDay} × ${days} days = ₹${totalAmount.toFixed(2)}`;
@@ -791,8 +791,8 @@ const AdminDashboard = () => {
                                     <div className="flex-1">
                                       <div className="font-medium">{materialType.name} ({materialType.size})</div>
                                       <div className="text-sm text-muted-foreground">Quantity: {group.quantity}</div>
-                                      {isFirstIssue && (
-                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">First Issue - 30 day minimum</div>
+                                      {isFirstIssue && materialType.gracePeriodDays > 0 && (
+                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">First Issue - Monthly rate</div>
                                       )}
                                     </div>
                                     <div className="flex-1 text-center">
