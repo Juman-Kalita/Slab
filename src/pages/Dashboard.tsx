@@ -716,9 +716,19 @@ const Dashboard = () => {
                               const siteStartDate = new Date(site.issueDate);
                               const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : new Date();
                               
-                              // Use inclusive method (+1) only if material was issued AFTER the site start date
-                              const isIssuedAfterStart = issueDate > siteStartDate;
-                              const days = differenceInDays(endDate, issueDate) + (isIssuedAfterStart ? 1 : 0);
+                              // Check if this is the first issue (same date as site creation)
+                              const isFirstIssue = issueDate.toDateString() === siteStartDate.toDateString();
+                              
+                              let days: number;
+                              if (isFirstIssue) {
+                                // For first issue, use minimum 30 days
+                                const actualDays = differenceInDays(endDate, issueDate) + 1;
+                                days = Math.max(30, actualDays);
+                              } else {
+                                // For subsequent issues, use actual days
+                                days = differenceInDays(endDate, issueDate) + 1;
+                              }
+                              
                               const totalAmount = group.quantity * materialType.rentPerDay * days;
                               
                               return (
@@ -727,6 +737,9 @@ const Dashboard = () => {
                                     <div className="flex-1">
                                       <div className="font-medium">{materialType.name} ({materialType.size})</div>
                                       <div className="text-sm text-muted-foreground">Quantity: {group.quantity}</div>
+                                      {isFirstIssue && (
+                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">First Issue - 30 day minimum</div>
+                                      )}
                                     </div>
                                     <div className="flex-1 text-center">
                                       <div className="text-xs text-muted-foreground">Issued</div>
