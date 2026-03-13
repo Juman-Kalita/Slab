@@ -8,6 +8,7 @@ export interface MaterialType {
   name: string;
   size: string;
   rentPerDay: number;
+  monthlyRate: number; // Monthly rate per item
   loadingCharge: number; // LC&ULC per item
   lostItemPenalty: number; // Rate in RS
   gracePeriodDays: number; // 20 or 30 days
@@ -16,82 +17,82 @@ export interface MaterialType {
 
 export const MATERIAL_TYPES: MaterialType[] = [
   // PLATES Category - 0 Days Grace Period (Daily calculation)
-  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 7500 },
-  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 956 },
-  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 0, inventory: 248 },
-  { id: "change-plate-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1461 },
-  { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
+  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 7500 },
+  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 956 },
+  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 0, inventory: 248 },
+  { id: "change-plate-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1461 },
+  { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
   
   // PROPS Category - 30 Days
-  { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83334, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
-  { id: "props-2x2.5", category: "Props", name: "Props", size: "2mx2.5m", rentPerDay: 3, loadingCharge: 3, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 650 },
-  { id: "props-2x3", category: "Props", name: "Props", size: "2mx3m", rentPerDay: 3.33334, loadingCharge: 3, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 1243 },
-  { id: "props-2x3.5", category: "Props", name: "Props", size: "2mx3.5m", rentPerDay: 3.66667, loadingCharge: 3, lostItemPenalty: 1920, gracePeriodDays: 30, inventory: 225 },
-  { id: "props-2x4", category: "Props", name: "Props", size: "2mx4m", rentPerDay: 4, loadingCharge: 3, lostItemPenalty: 2000, gracePeriodDays: 30, inventory: 287 },
+  { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83334, monthlyRate: 85, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
+  { id: "props-2x2.5", category: "Props", name: "Props", size: "2mx2.5m", rentPerDay: 3, monthlyRate: 90, loadingCharge: 3, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 650 },
+  { id: "props-2x3", category: "Props", name: "Props", size: "2mx3m", rentPerDay: 3.33334, monthlyRate: 100, loadingCharge: 3, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 1243 },
+  { id: "props-2x3.5", category: "Props", name: "Props", size: "2mx3.5m", rentPerDay: 3.66667, monthlyRate: 110, loadingCharge: 3, lostItemPenalty: 1920, gracePeriodDays: 30, inventory: 225 },
+  { id: "props-2x4", category: "Props", name: "Props", size: "2mx4m", rentPerDay: 4, monthlyRate: 120, loadingCharge: 3, lostItemPenalty: 2000, gracePeriodDays: 30, inventory: 287 },
   
   // SPAN Category - 30 Days
-  { id: "box-span", category: "Span", name: "Box Span", size: "", rentPerDay: 4.16667, loadingCharge: 3, lostItemPenalty: 2240, gracePeriodDays: 30, inventory: 512 },
-  { id: "zig-zag-span", category: "Span", name: "Zig-Zag Span", size: "", rentPerDay: 6, loadingCharge: 5, lostItemPenalty: 3200, gracePeriodDays: 30, inventory: 224 },
+  { id: "box-span", category: "Span", name: "Box Span", size: "", rentPerDay: 4.16667, monthlyRate: 125, loadingCharge: 3, lostItemPenalty: 2240, gracePeriodDays: 30, inventory: 512 },
+  { id: "zig-zag-span", category: "Span", name: "Zig-Zag Span", size: "", rentPerDay: 6, monthlyRate: 180, loadingCharge: 5, lostItemPenalty: 3200, gracePeriodDays: 30, inventory: 224 },
   
   // H FRAME Category - 30 Days
-  { id: "h-frame-with-ladder", category: "H Frame", name: "H-Frame", size: "With Ladder", rentPerDay: 5, loadingCharge: 5, lostItemPenalty: 2000, gracePeriodDays: 30, inventory: 134 },
-  { id: "h-frame-without-ladder", category: "H Frame", name: "H-Frame", size: "Without Ladder", rentPerDay: 4, loadingCharge: 5, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 190 },
-  { id: "h-frame-1m", category: "H Frame", name: "H-Frame", size: "1m", rentPerDay: 3, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 20 },
-  { id: "cbp-small", category: "H Frame", name: "CBP", size: "Small", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 640, gracePeriodDays: 30, inventory: 40 },
-  { id: "cbp", category: "H Frame", name: "CBP", size: "", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 640, gracePeriodDays: 30, inventory: 50 },
-  { id: "planks", category: "H Frame", name: "Planks", size: "", rentPerDay: 5, loadingCharge: 4, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 365 },
-  { id: "base-wheels", category: "H Frame", name: "Base Wheels", size: "", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 33 },
-  { id: "base-jack", category: "H Frame", name: "Base Jack", size: "", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 1218 },
+  { id: "h-frame-with-ladder", category: "H Frame", name: "H-Frame", size: "With Ladder", rentPerDay: 5, monthlyRate: 150, loadingCharge: 5, lostItemPenalty: 2000, gracePeriodDays: 30, inventory: 134 },
+  { id: "h-frame-without-ladder", category: "H Frame", name: "H-Frame", size: "Without Ladder", rentPerDay: 4, monthlyRate: 120, loadingCharge: 5, lostItemPenalty: 1760, gracePeriodDays: 30, inventory: 190 },
+  { id: "h-frame-1m", category: "H Frame", name: "H-Frame", size: "1m", rentPerDay: 3, monthlyRate: 90, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 20 },
+  { id: "cbp-small", category: "H Frame", name: "CBP", size: "Small", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1, lostItemPenalty: 640, gracePeriodDays: 30, inventory: 40 },
+  { id: "cbp", category: "H Frame", name: "CBP", size: "", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1, lostItemPenalty: 640, gracePeriodDays: 30, inventory: 50 },
+  { id: "planks", category: "H Frame", name: "Planks", size: "", rentPerDay: 5, monthlyRate: 150, loadingCharge: 4, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 365 },
+  { id: "base-wheels", category: "H Frame", name: "Base Wheels", size: "", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 33 },
+  { id: "base-jack", category: "H Frame", name: "Base Jack", size: "", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 1218 },
   
   // SCAFFOLDING Category - 30 Days
-  { id: "vertical-3m", category: "Scaffolding", name: "Vertical", size: "3m", rentPerDay: 3, loadingCharge: 2, lostItemPenalty: 1120, gracePeriodDays: 30, inventory: 637 },
-  { id: "vertical-2.5m", category: "Scaffolding", name: "Vertical", size: "2.5m", rentPerDay: 2.5, loadingCharge: 2, lostItemPenalty: 933.33, gracePeriodDays: 30, inventory: 514 },
-  { id: "vertical-2m", category: "Scaffolding", name: "Vertical", size: "2m", rentPerDay: 2, loadingCharge: 2, lostItemPenalty: 746.66, gracePeriodDays: 30, inventory: 470 },
-  { id: "vertical-1.5m", category: "Scaffolding", name: "Vertical", size: "1.5m", rentPerDay: 1.5, loadingCharge: 2, lostItemPenalty: 560, gracePeriodDays: 30, inventory: 547 },
-  { id: "vertical-1m", category: "Scaffolding", name: "Vertical", size: "1m", rentPerDay: 1, loadingCharge: 2, lostItemPenalty: 373.33, gracePeriodDays: 30, inventory: 307 },
-  { id: "vertical-0.5m", category: "Scaffolding", name: "Vertical", size: "0.5m", rentPerDay: 0.5, loadingCharge: 2, lostItemPenalty: 186.66, gracePeriodDays: 30, inventory: 91 },
-  { id: "ledger-2m", category: "Scaffolding", name: "Ledger", size: "2m", rentPerDay: 1.66667, loadingCharge: 1, lostItemPenalty: 573.33, gracePeriodDays: 30, inventory: 71 },
-  { id: "ledger-1.5m", category: "Scaffolding", name: "Ledger", size: "1.5m", rentPerDay: 1.25, loadingCharge: 1, lostItemPenalty: 429.6, gracePeriodDays: 30, inventory: 153 },
-  { id: "ledger-1.2m", category: "Scaffolding", name: "Ledger", size: "1.2m", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 344, gracePeriodDays: 30, inventory: 4686 },
-  { id: "ledger-1m", category: "Scaffolding", name: "Ledger", size: "1m", rentPerDay: 0.83334, loadingCharge: 1, lostItemPenalty: 286.66, gracePeriodDays: 30, inventory: 1034 },
-  { id: "joint-pins", category: "Scaffolding", name: "Joint Pins", size: "", rentPerDay: 0.33334, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 1282 },
-  { id: "planks-scaffolding", category: "Scaffolding", name: "Planks", size: "", rentPerDay: 5, loadingCharge: 4, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 0 },
-  { id: "base-jack-scaffolding", category: "Scaffolding", name: "Base Jack", size: "", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 0 },
-  { id: "stirrup-head", category: "Scaffolding", name: "Stirrup Head", size: "", rentPerDay: 1, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 1201 },
-  { id: "base-wheels-scaffolding", category: "Scaffolding", name: "Base Wheels", size: "", rentPerDay: 2, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "vertical-3m", category: "Scaffolding", name: "Vertical", size: "3m", rentPerDay: 3, monthlyRate: 90, loadingCharge: 2, lostItemPenalty: 1120, gracePeriodDays: 30, inventory: 637 },
+  { id: "vertical-2.5m", category: "Scaffolding", name: "Vertical", size: "2.5m", rentPerDay: 2.5, monthlyRate: 75, loadingCharge: 2, lostItemPenalty: 933.33, gracePeriodDays: 30, inventory: 514 },
+  { id: "vertical-2m", category: "Scaffolding", name: "Vertical", size: "2m", rentPerDay: 2, monthlyRate: 60, loadingCharge: 2, lostItemPenalty: 746.66, gracePeriodDays: 30, inventory: 470 },
+  { id: "vertical-1.5m", category: "Scaffolding", name: "Vertical", size: "1.5m", rentPerDay: 1.5, monthlyRate: 45, loadingCharge: 2, lostItemPenalty: 560, gracePeriodDays: 30, inventory: 547 },
+  { id: "vertical-1m", category: "Scaffolding", name: "Vertical", size: "1m", rentPerDay: 1, monthlyRate: 30, loadingCharge: 2, lostItemPenalty: 373.33, gracePeriodDays: 30, inventory: 307 },
+  { id: "vertical-0.5m", category: "Scaffolding", name: "Vertical", size: "0.5m", rentPerDay: 0.5, monthlyRate: 15, loadingCharge: 2, lostItemPenalty: 186.66, gracePeriodDays: 30, inventory: 91 },
+  { id: "ledger-2m", category: "Scaffolding", name: "Ledger", size: "2m", rentPerDay: 1.66667, monthlyRate: 50, loadingCharge: 1, lostItemPenalty: 573.33, gracePeriodDays: 30, inventory: 71 },
+  { id: "ledger-1.5m", category: "Scaffolding", name: "Ledger", size: "1.5m", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 429.6, gracePeriodDays: 30, inventory: 153 },
+  { id: "ledger-1.2m", category: "Scaffolding", name: "Ledger", size: "1.2m", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 344, gracePeriodDays: 30, inventory: 4686 },
+  { id: "ledger-1m", category: "Scaffolding", name: "Ledger", size: "1m", rentPerDay: 0.83334, monthlyRate: 25, loadingCharge: 1, lostItemPenalty: 286.66, gracePeriodDays: 30, inventory: 1034 },
+  { id: "joint-pins", category: "Scaffolding", name: "Joint Pins", size: "", rentPerDay: 0.33334, monthlyRate: 10, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 1282 },
+  { id: "planks-scaffolding", category: "Scaffolding", name: "Planks", size: "", rentPerDay: 5, monthlyRate: 150, loadingCharge: 4, lostItemPenalty: 1600, gracePeriodDays: 30, inventory: 0 },
+  { id: "base-jack-scaffolding", category: "Scaffolding", name: "Base Jack", size: "", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 0 },
+  { id: "stirrup-head", category: "Scaffolding", name: "Stirrup Head", size: "", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 300, gracePeriodDays: 30, inventory: 1201 },
+  { id: "base-wheels-scaffolding", category: "Scaffolding", name: "Base Wheels", size: "", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // BRACING PIPE Category - 30 Days
-  { id: "bracing-pipe-20ft", category: "Bracing Pipe", name: "Bracing Pipe", size: "20'/6m", rentPerDay: 5, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 154 },
-  { id: "bracing-pipe-10ft", category: "Bracing Pipe", name: "Bracing Pipe", size: "10'/3m", rentPerDay: 2.5, loadingCharge: 2, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "coupler", category: "Bracing Pipe", name: "Coupler", size: "", rentPerDay: 0.33334, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 591 },
+  { id: "bracing-pipe-20ft", category: "Bracing Pipe", name: "Bracing Pipe", size: "20'/6m", rentPerDay: 5, monthlyRate: 150, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 154 },
+  { id: "bracing-pipe-10ft", category: "Bracing Pipe", name: "Bracing Pipe", size: "10'/3m", rentPerDay: 2.5, monthlyRate: 75, loadingCharge: 2, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "coupler", category: "Bracing Pipe", name: "Coupler", size: "", rentPerDay: 0.33334, monthlyRate: 10, loadingCharge: 0.5, lostItemPenalty: 80, gracePeriodDays: 30, inventory: 591 },
   
   // C CHANNEL Category - 30 Days
-  { id: "c-channel-3-5m", category: "C Channel", name: "C Channel 3\"", size: "5m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "c-channel-3-6m", category: "C Channel", name: "C Channel 3\"", size: "6m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 16 },
-  { id: "c-channel-4-3m", category: "C Channel", name: "C Channel 4\"", size: "3m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "c-channel-4-5m", category: "C Channel", name: "C Channel 4\"", size: "5m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 11 },
-  { id: "c-channel-4-6m", category: "C Channel", name: "C Channel 4\"", size: "6m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "c-channel-3-5m", category: "C Channel", name: "C Channel 3\"", size: "5m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "c-channel-3-6m", category: "C Channel", name: "C Channel 3\"", size: "6m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 16 },
+  { id: "c-channel-4-3m", category: "C Channel", name: "C Channel 4\"", size: "3m", rentPerDay: 0, monthlyRate: 150, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "c-channel-4-5m", category: "C Channel", name: "C Channel 4\"", size: "5m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 11 },
+  { id: "c-channel-4-6m", category: "C Channel", name: "C Channel 4\"", size: "6m", rentPerDay: 0, monthlyRate: 300, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // I-SECTION Category - 30 Days
-  { id: "i-section-5-3m", category: "I-Section", name: "I-Section 5\"", size: "3m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 25 },
-  { id: "i-section-5-6m", category: "I-Section", name: "I-Section 5\"", size: "6m", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "i-section-5-3m", category: "I-Section", name: "I-Section 5\"", size: "3m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 25 },
+  { id: "i-section-5-6m", category: "I-Section", name: "I-Section 5\"", size: "6m", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // ROUND COLUMN Category - 30 Days
-  { id: "round-column-9", category: "Round Column", name: "Round Column", size: "9\"", rentPerDay: 0, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "round-column-12", category: "Round Column", name: "Round Column", size: "12\"", rentPerDay: 0, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 2 },
-  { id: "round-column-18", category: "Round Column", name: "Round Column", size: "18\"", rentPerDay: 0, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 2 },
+  { id: "round-column-9", category: "Round Column", name: "Round Column", size: "9\"", rentPerDay: 0, monthlyRate: 1000, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "round-column-12", category: "Round Column", name: "Round Column", size: "12\"", rentPerDay: 0, monthlyRate: 1200, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 2 },
+  { id: "round-column-18", category: "Round Column", name: "Round Column", size: "18\"", rentPerDay: 0, monthlyRate: 1800, loadingCharge: 4, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 2 },
   
   // EXTRA Category - 30 Days
-  { id: "tie-rod", category: "Extra", name: "Tie Rod", size: "1.2m", rentPerDay: 0.83334, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "tie-channel-2", category: "Extra", name: "Tie Channel", size: "2'", rentPerDay: 1.5, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "tie-channel-4", category: "Extra", name: "Tie Channel", size: "4'", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "anchor-nut", category: "Extra", name: "Anchor Nut", size: "", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "tie-rod", category: "Extra", name: "Tie Rod", size: "1.2m", rentPerDay: 0.83334, monthlyRate: 25, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "tie-channel-2", category: "Extra", name: "Tie Channel", size: "2'", rentPerDay: 1.5, monthlyRate: 45, loadingCharge: 1, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "tie-channel-4", category: "Extra", name: "Tie Channel", size: "4'", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "anchor-nut", category: "Extra", name: "Anchor Nut", size: "", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
   
   // CONCRETING Category - 30 Days
-  { id: "electric-mixer", category: "Concreting", name: "Electric Mixer", size: "", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 3 },
-  { id: "wheel-barrow", category: "Concreting", name: "Wheel Barrow", size: "", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
-  { id: "concreting-tray", category: "Concreting", name: "Concreting Tray", size: "", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 1 },
-  { id: "material-lift", category: "Concreting", name: "Material Lift", size: "", rentPerDay: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "electric-mixer", category: "Concreting", name: "Electric Mixer", size: "", rentPerDay: 0, monthlyRate: 1000, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 3 },
+  { id: "wheel-barrow", category: "Concreting", name: "Wheel Barrow", size: "", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
+  { id: "concreting-tray", category: "Concreting", name: "Concreting Tray", size: "", rentPerDay: 0, monthlyRate: 0, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 1 },
+  { id: "material-lift", category: "Concreting", name: "Material Lift", size: "", rentPerDay: 0, monthlyRate: 8000, loadingCharge: 0, lostItemPenalty: 0, gracePeriodDays: 30, inventory: 0 },
 ];
 
 // Types

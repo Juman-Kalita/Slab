@@ -771,17 +771,19 @@ const AdminDashboard = () => {
                               // Check if this is the first issue (same date as site creation)
                               const isFirstIssue = issueDate.toDateString() === siteStartDate.toDateString();
                               
-                              let days: number;
+                              let totalAmount: number;
+                              let calculationText: string;
+                              
                               if (isFirstIssue) {
-                                // For first issue, use minimum 30 days
-                                const actualDays = differenceInDays(endDate, issueDate) + 1;
-                                days = Math.max(30, actualDays);
+                                // For first issue, use monthly rate (no day calculation)
+                                totalAmount = group.quantity * materialType.monthlyRate;
+                                calculationText = `${group.quantity} × ₹${materialType.monthlyRate}/month = ₹${totalAmount.toFixed(2)}`;
                               } else {
                                 // For subsequent issues, use actual days
-                                days = differenceInDays(endDate, issueDate) + 1;
+                                const days = differenceInDays(endDate, issueDate) + 1;
+                                totalAmount = group.quantity * materialType.rentPerDay * days;
+                                calculationText = `${group.quantity} × ₹${materialType.rentPerDay} × ${days} days = ₹${totalAmount.toFixed(2)}`;
                               }
-                              
-                              const totalAmount = group.quantity * materialType.rentPerDay * days;
                               
                               return (
                                 <div key={`${group.materialTypeId}-${group.issueDate}-${index}`} className="p-3 bg-muted rounded space-y-2">
@@ -810,7 +812,7 @@ const AdminDashboard = () => {
                                   <div className="text-xs bg-background p-2 rounded">
                                     <div className="flex justify-between">
                                       <span className="text-muted-foreground">Calculation:</span>
-                                      <span className="font-medium">{group.quantity} × ₹{materialType.rentPerDay} × {days} days = ₹{totalAmount.toFixed(2)}</span>
+                                      <span className="font-medium">{calculationText}</span>
                                     </div>
                                   </div>
                                 </div>
