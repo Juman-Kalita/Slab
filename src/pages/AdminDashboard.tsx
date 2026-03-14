@@ -728,7 +728,10 @@ const AdminDashboard = () => {
                     })()}
 
                     {/* Materials at this site */}
-                    {site.materials.filter(m => m.quantity > 0).length > 0 && (
+                    {(() => {
+                      const issuedEvents = site.history.filter(h => h.action === "Issued" && h.materialTypeId);
+                      return issuedEvents.length > 0;
+                    })() && (
                       <div className="border-t pt-4">
                         <h5 className="font-semibold mb-3">Materials ({totalItems} items)</h5>
                         <div className="space-y-2">
@@ -753,11 +756,8 @@ const AdminDashboard = () => {
                               }
                             });
                             
-                            // Filter to only show materials that are still at the site
-                            const currentMaterials = site.materials.filter(m => m.quantity > 0);
-                            const materialsToShow = Array.from(materialGroups.values()).filter(group => {
-                              return currentMaterials.some(m => m.materialTypeId === group.materialTypeId);
-                            });
+                            // Show ALL issued materials (including returned ones)
+                            const materialsToShow = Array.from(materialGroups.values());
                             
                             return materialsToShow.map((group, index) => {
                               const materialType = getMaterialType(group.materialTypeId);
@@ -823,9 +823,9 @@ const AdminDashboard = () => {
                       </div>
                     )}
 
-                    {site.materials.filter(m => m.quantity > 0).length === 0 && (
+                    {site.history.filter(h => h.action === "Issued" && h.materialTypeId).length === 0 && (
                       <div className="text-sm text-muted-foreground text-center py-4 border-t">
-                        No materials currently at this site
+                        No materials issued to this site
                       </div>
                     )}
                   </CardContent>
