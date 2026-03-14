@@ -20,8 +20,9 @@ export const MATERIAL_TYPES: MaterialType[] = [
   { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 7500 },
   { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 956 },
   { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 0, inventory: 248 },
-  { id: "change-plate-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1461 },
-  { id: "change-plate-3x1", category: "Plates", name: "New Changed", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
+  { id: "new-changed-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 1000 },
+  { id: "change-plate-3x2", category: "Plates", name: "Old Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 1461 },
+  { id: "change-plate-3x1", category: "Plates", name: "Old Changed", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 1 },
   
   // PROPS Category - 30 Days
   { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83334, monthlyRate: 85, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
@@ -654,8 +655,44 @@ export function calculateSiteRent(site: Site): {
   let lostItemsPenalty = 0;
   const materialBreakdown: Array<any> = [];
   
-  // Use stored original charges
-  const rentAmount = site.originalRentCharge;
+  // Dynamically recalculate rent from history events using new billing logic
+  const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : new Date();
+  const siteStartDate = new Date(site.issueDate);
+  
+  // Group issued materials by materialTypeId + issueDate from history
+  const issuedGroups: Map<string, { materialTypeId: string; quantity: number; issueDate: string }> = new Map();
+  site.history.forEach(event => {
+    if (event.action === "Issued" && event.materialTypeId && event.quantity) {
+      const key = `${event.materialTypeId}-${event.date}`;
+      const existing = issuedGroups.get(key);
+      if (existing) {
+        existing.quantity += event.quantity;
+      } else {
+        issuedGroups.set(key, { materialTypeId: event.materialTypeId, quantity: event.quantity, issueDate: event.date });
+      }
+    }
+  });
+  
+  let dynamicRentAmount = 0;
+  issuedGroups.forEach(group => {
+    const mt = getMaterialType(group.materialTypeId);
+    if (!mt) return;
+    const issueDate = new Date(group.issueDate);
+    const isFirstIssue = issueDate.toDateString() === siteStartDate.toDateString();
+    
+    let groupRent: number;
+    if (isFirstIssue && mt.gracePeriodDays > 0) {
+      // Monthly rate for first issue materials with grace period
+      groupRent = group.quantity * mt.monthlyRate;
+    } else {
+      // Day calculation for plates (0 grace period) or subsequent issues
+      const days = differenceInDays(endDate, issueDate) + 1;
+      groupRent = group.quantity * mt.rentPerDay * days;
+    }
+    dynamicRentAmount += groupRent;
+  });
+  
+  const rentAmount = dynamicRentAmount;
   const issueLoadingCharges = site.originalIssueLC;
   
   // Build material breakdown
