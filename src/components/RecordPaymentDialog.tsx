@@ -223,6 +223,12 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
                 <span className="text-muted-foreground">Loading Charges:</span>
                 <span className="font-semibold">₹{(calculatedRent.issueLoadingCharges + calculatedRent.returnLoadingCharges).toLocaleString("en-IN")}</span>
               </div>
+              {calculatedRent.transportCharges > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Transport Charges:</span>
+                  <span className="font-semibold">₹{calculatedRent.transportCharges.toLocaleString("en-IN")}</span>
+                </div>
+              )}
               {calculatedRent.lostItemsPenalty > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Lost Items:</span>
@@ -236,13 +242,13 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t">
-                <span className="font-medium">Total Required:</span>
-                <span className="font-bold text-lg">₹{calculatedRent.totalRequired.toLocaleString("en-IN")}</span>
+                <span className="font-medium">Total Bill:</span>
+                <span className="font-bold text-lg">₹{(calculatedRent.totalRequired + calculatedRent.amountPaid).toLocaleString("en-IN")}</span>
               </div>
               {calculatedRent.amountPaid > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Already Paid:</span>
-                  <span className="font-semibold text-green-600">₹{calculatedRent.amountPaid.toLocaleString("en-IN")}</span>
+                  <span className="font-semibold text-green-600">- ₹{calculatedRent.amountPaid.toLocaleString("en-IN")}</span>
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t">

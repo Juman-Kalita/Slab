@@ -681,11 +681,11 @@ export function calculateSiteRent(site: Site): {
     const isFirstIssue = issueDate.toDateString() === siteStartDate.toDateString();
     
     let groupRent: number;
-    if (isFirstIssue && mt.gracePeriodDays > 0) {
-      // Monthly rate for first issue materials with grace period
+    if (isFirstIssue && mt.gracePeriodDays > 0 && !site.gracePeriodEndDate) {
+      // Monthly rate ONLY when no explicit end date is set (open-ended grace period)
       groupRent = group.quantity * mt.monthlyRate;
     } else {
-      // Day calculation for plates (0 grace period) or subsequent issues
+      // Day-wise calculation: for plates, subsequent issues, OR when end date is explicitly set
       const days = differenceInDays(endDate, issueDate) + 1;
       groupRent = group.quantity * mt.rentPerDay * days;
     }
@@ -765,16 +765,8 @@ export function calculateSiteRent(site: Site): {
   }
   
   // Calculate base charges (includes issue transport charges and additional rent after grace period)
-  const baseCharges = rentAmount + issueLoadingCharges + issueTransportCharges + penaltyAmount;
-  const unpaidBase = Math.max(0, baseCharges - site.amountPaid);
-  const overpayment = Math.max(0, site.amountPaid - baseCharges);
-  
-  const newCharges = returnLoadingCharges + lostItemsPenalty + returnTransportCharges;
-  const newChargesAfterOverpayment = Math.max(0, newCharges - overpayment);
-  
-  const totalRequired = unpaidBase + newChargesAfterOverpayment;
-  const amountPaidTowardsNew = Math.min(overpayment, newCharges);
-  
+  const baseCharges = rentAmount + issueLoadingCharges + issueTransportCharges + returnLoadingCharges + returnTransportCharges + lostItemsPenalty + penaltyAmount;
+  const totalRequired = Math.max(0, baseCharges - site.amountPaid);
   const remainingDue = totalRequired;
   const isFullyPaid = remainingDue === 0 && site.materials.every(m => m.quantity === 0);
   
@@ -789,7 +781,7 @@ export function calculateSiteRent(site: Site): {
     lostItemsPenalty,
     penaltyAmount,
     totalRequired,
-    amountPaid: amountPaidTowardsNew,
+    amountPaid: site.amountPaid,
     remainingDue,
     isFullyPaid,
     materialBreakdown

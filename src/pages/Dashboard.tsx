@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { logout, getCustomers, getDashboardStats, calculateRent, getMaterialType, calculateSiteRent, type Customer } from "@/lib/rental-store";
+import { deleteHistoryEvent } from "@/lib/supabase-store";
 import { generateInvoice, generateInvoiceNumber } from "@/lib/invoice-generator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { HardHat, LogOut, Users, Package, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, PackageSearch, Download } from "lucide-react";
+import { HardHat, LogOut, Users, Package, IndianRupee, Plus, RotateCcw, Search, ArrowLeft, Wallet, PackageSearch, Download, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ThemeToggle } from "@/components/theme-toggle";
 import IssueMaterialsDialog from "@/components/IssueMaterialsDialog";
@@ -616,6 +617,16 @@ const Dashboard = () => {
                           <span className="font-semibold text-red-600">₹{siteCalc.lostItemsPenalty.toLocaleString("en-IN")}</span>
                         </div>
                       )}
+                      <div className="flex justify-between pt-2 border-t font-medium">
+                        <span>Total Bill:</span>
+                        <span>₹{(siteCalc.totalRequired + site.amountPaid).toLocaleString("en-IN")}</span>
+                      </div>
+                      {site.amountPaid > 0 && (
+                        <div className="flex justify-between text-green-600 dark:text-green-400">
+                          <span>Amount Paid:</span>
+                          <span className="font-semibold">- ₹{site.amountPaid.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between pt-2 border-t">
                         <span className="font-medium">Remaining Due:</span>
                         <span className="font-bold text-lg text-accent">₹{siteCalc.remainingDue.toLocaleString("en-IN")}</span>
@@ -666,6 +677,20 @@ const Dashboard = () => {
                                       {format(new Date(payment.date), "dd MMM yyyy, hh:mm a")}
                                     </div>
                                   </div>
+                                  {payment.id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7 w-7 p-0"
+                                      onClick={async () => {
+                                        if (!confirm(`Undo payment of ₹${payment.amount}?`)) return;
+                                        const ok = await deleteHistoryEvent(payment.id!);
+                                        if (ok) { refresh(); } else { toast.error("Failed to undo payment"); }
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -722,12 +747,12 @@ const Dashboard = () => {
                               let totalAmount: number;
                               let calculationText: string;
                               
-                              if (isFirstIssue && materialType.gracePeriodDays > 0) {
-                                // For first issue with grace period, use monthly rate (no day calculation)
+                              if (isFirstIssue && materialType.gracePeriodDays > 0 && !site.gracePeriodEndDate) {
+                                // Monthly rate only when no explicit end date (open-ended)
                                 totalAmount = group.quantity * materialType.monthlyRate;
                                 calculationText = `${group.quantity} × ₹${materialType.monthlyRate}/month = ₹${totalAmount.toFixed(2)}`;
                               } else {
-                                // For subsequent issues OR materials with 0 grace period (plates), use actual days
+                                // Day-wise for plates, subsequent issues, or when end date is set
                                 const days = differenceInDays(endDate, issueDate) + 1;
                                 totalAmount = group.quantity * materialType.rentPerDay * days;
                                 calculationText = `${group.quantity} × ₹${materialType.rentPerDay} × ${days} days = ₹${totalAmount.toFixed(2)}`;
@@ -774,6 +799,76 @@ const Dashboard = () => {
                     {site.history.filter(h => h.action === "Issued" && h.materialTypeId).length === 0 && (
                       <div className="text-sm text-muted-foreground text-center py-4 border-t">
                         No materials issued to this site
+                      </div>
+                    )}
+
+                    {/* Returned Materials */}
+                    {site.history.filter(h => h.action === "Returned" && h.materialTypeId).length > 0 && (
+                      <div className="border-t pt-4">
+                        <h5 className="font-semibold mb-3 text-orange-600 dark:text-orange-400">Returned Materials</h5>
+                        <div className="space-y-2">
+                          {(() => {
+                            const returnEvents = site.history.filter(h => h.action === "Returned" && h.materialTypeId);
+                            return returnEvents.map((event, index) => {
+                              const materialType = getMaterialType(event.materialTypeId!);
+                              if (!materialType) return null;
+
+                              // Find the corresponding issue event for this material
+                              const issueEvent = site.history.find(h =>
+                                h.action === "Issued" && h.materialTypeId === event.materialTypeId
+                              );
+                              const issueDate = issueEvent ? new Date(issueEvent.date) : new Date(site.issueDate);
+                              const returnDate = new Date(event.date);
+                              const days = differenceInDays(returnDate, issueDate) + 1;
+
+                              const qty = event.quantity || 0;
+                              const lostQty = event.quantityLost || 0;
+                              const returnLC = event.hasOwnLabor ? 0 : qty * materialType.loadingCharge;
+                              const lostPenalty = lostQty * materialType.lostItemPenalty;
+                              const rentAmount = qty * materialType.rentPerDay * days;
+
+                              return (
+                                <div key={`return-${event.id || index}`} className="p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded space-y-2">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="font-medium">{materialType.name} ({materialType.size})</div>
+                                      <div className="text-sm text-muted-foreground">
+                                        Returned: {qty}{lostQty > 0 ? ` | Lost: ${lostQty}` : ""}
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                      <div className="text-xs text-muted-foreground">Issued</div>
+                                      <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
+                                      <div className="text-xs text-muted-foreground mt-1">Returned</div>
+                                      <div className="text-sm font-medium">{format(returnDate, "dd MMM yyyy")}</div>
+                                    </div>
+                                    <div className="flex-1 text-right">
+                                      <div className="text-sm font-semibold">{days} days</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-xs bg-background p-2 rounded space-y-1">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Return LC:</span>
+                                      <span className="font-medium">₹{returnLC.toFixed(2)}</span>
+                                    </div>
+                                    {lostQty > 0 && (
+                                      <div className="flex justify-between text-red-600 dark:text-red-400">
+                                        <span>Lost Penalty ({lostQty} items):</span>
+                                        <span className="font-medium">₹{lostPenalty.toFixed(2)}</span>
+                                      </div>
+                                    )}
+                                    {event.transportCharges ? (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Transport:</span>
+                                        <span className="font-medium">₹{event.transportCharges.toFixed(2)}</span>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
                       </div>
                     )}
                   </CardContent>

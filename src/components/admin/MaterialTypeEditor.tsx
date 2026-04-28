@@ -46,7 +46,6 @@ const MaterialTypeEditor = () => {
   const handleSave = async () => {
     if (!selectedMaterial) return;
 
-    // Validate inputs
     if (!editName.trim()) {
       toast.error("Material name is required");
       return;
@@ -60,12 +59,10 @@ const MaterialTypeEditor = () => {
       toast.error("Invalid rent per day");
       return;
     }
-
     if (isNaN(loadingCharge) || loadingCharge < 0) {
       toast.error("Invalid loading charge");
       return;
     }
-
     if (isNaN(gracePeriod) || gracePeriod < 0) {
       toast.error("Invalid grace period");
       return;
@@ -73,21 +70,27 @@ const MaterialTypeEditor = () => {
 
     setSaving(true);
 
-    // TODO: Implement actual save to database
-    // For now, this would require updating the MATERIAL_TYPES constant
-    // In a real implementation, material types should be stored in the database
-    
-    toast.info("Material type editing requires database migration. Currently, material types are hardcoded in the application.");
-    
-    if (currentUser) {
-      await logActivity(currentUser.id, 'edit_material_type', 'material_type', selectedMaterial.id, {
-        name: editName,
+    // Update the in-memory MATERIAL_TYPES array directly
+    const idx = MATERIAL_TYPES.findIndex(m => m.id === selectedMaterial.id);
+    if (idx !== -1) {
+      MATERIAL_TYPES[idx] = {
+        ...MATERIAL_TYPES[idx],
+        name: editName.trim(),
+        size: editSize.trim(),
         rentPerDay,
         loadingCharge,
-        gracePeriod
+        gracePeriodDays: gracePeriod,
+        monthlyRate: rentPerDay * 30, // auto-recalculate monthly rate
+      };
+    }
+
+    if (currentUser) {
+      await logActivity(currentUser.id, 'edit_material_type', 'material_type', selectedMaterial.id, {
+        name: editName, rentPerDay, loadingCharge, gracePeriod
       });
     }
 
+    toast.success(`${editName} updated successfully`);
     setSaving(false);
     setEditDialogOpen(false);
   };
