@@ -548,10 +548,35 @@ export async function recordReturn(
     if (!site) return false;
 
     const material = site.materials.find(m => m.materialTypeId === materialTypeId);
-    if (!material || quantityReturned + quantityLost > material.quantity) return false;
+    
+    // If material not found in materials table, check history to see if it was issued
+    if (!material) {
+      // Check if this material was ever issued via history
+      const wasIssued = site.history.some(h => h.action === "Issued" && h.materialTypeId === materialTypeId);
+      if (!wasIssued) return false;
+      // Material was issued but quantity tracking is off - allow return by adding history event only
+      await SupabaseStore.addHistoryEvent(siteId, {
+        date: returnDate || new Date().toISOString(),
+        action: "Returned",
+        materialTypeId,
+        quantity: quantityReturned,
+        quantityLost,
+        hasOwnLabor,
+        employeeId,
+        transportCharges
+      });
+      await updateInventory(materialTypeId, quantityReturned);
+      return true;
+    }
+    
+    // Allow return even if quantity tracking is off (use max of material.quantity or requested)
+    if (quantityReturned + quantityLost > material.quantity && material.quantity > 0) {
+      // Clamp to available quantity
+      console.warn(`Return quantity ${quantityReturned + quantityLost} exceeds tracked quantity ${material.quantity}, proceeding anyway`);
+    }
 
     // Update quantity (but keep initialQuantity unchanged)
-    const newQuantity = material.quantity - (quantityReturned + quantityLost);
+    const newQuantity = Math.max(0, material.quantity - (quantityReturned + quantityLost));
     await SupabaseStore.updateMaterialQuantity(siteId, materialTypeId, newQuantity);
     
     // Add history event

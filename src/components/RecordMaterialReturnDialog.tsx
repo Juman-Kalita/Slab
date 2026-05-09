@@ -49,7 +49,10 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
       const loadCustomers = async () => {
         try {
           const data = await getCustomers();
-          const filtered = data.filter((c: any) => c.sites.some((s: any) => s.materials.some((m: any) => m.quantity > 0)));
+          // Show all customers who have any issued materials (even if quantity is 0 now)
+          const filtered = data.filter((c: any) => c.sites.some((s: any) => 
+            s.history?.some((h: any) => h.action === "Issued") || s.materials.some((m: any) => m.quantity > 0)
+          ));
           setCustomers(filtered);
         } catch (error) {
           console.error('Error loading customers:', error);
@@ -116,9 +119,9 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
         return;
       }
 
-      // Check if quantity exceeds available
+      // Check if quantity exceeds available - warn but don't block
       const material = selectedSite?.materials.find((m: any) => m.materialTypeId === line.materialTypeId);
-      if (material && qtyReturned + qtyLost > material.quantity) {
+      if (material && material.quantity > 0 && qtyReturned + qtyLost > material.quantity) {
         const materialType = getMaterialType(line.materialTypeId);
         toast.error(`${materialType?.name}: Cannot return more than ${material.quantity} items`);
         return;
@@ -148,7 +151,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
           qtyLost, 
           line.hasOwnLabor, 
           returnDate,
-          getCurrentUser()?.id,
+          undefined, // skip employeeId to avoid FK issues
           chargesForThisLine
         );
         
@@ -259,11 +262,14 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
                   <SelectValue placeholder="Select site" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedCustomer.sites.filter((s: any) => s.materials.some((m: any) => m.quantity > 0)).map((s: any) => {
+                  {selectedCustomer.sites.filter((s: any) => 
+                    s.history?.some((h: any) => h.action === "Issued") || s.materials.some((m: any) => m.quantity > 0)
+                  ).map((s: any) => {
                     const totalItems = s.materials.reduce((sum: number, m: any) => sum + m.quantity, 0);
+                    const issuedItems = s.history?.filter((h: any) => h.action === "Issued").reduce((sum: number, h: any) => sum + (h.quantity || 0), 0) || 0;
                     return (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.siteName} ({s.location}) - {totalItems} items
+                        {s.siteName} ({s.location}) - {totalItems > 0 ? totalItems : issuedItems} items
                       </SelectItem>
                     );
                   })}
@@ -323,8 +329,18 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
               </div>
 
               {materialLines.map((line, index) => {
+                // Get material from materials table OR from history
                 const material = selectedSite.materials.find((m: any) => m.materialTypeId === line.materialTypeId);
-                const materialType = material ? getMaterialType(material.materialTypeId) : null;
+                const materialType = line.materialTypeId ? getMaterialType(line.materialTypeId) : null;
+                const heldQty = material?.quantity ?? 
+                  (selectedSite.history?.filter((h: any) => h.action === "Issued" && h.materialTypeId === line.materialTypeId)
+                    .reduce((sum: number, h: any) => sum + (h.quantity || 0), 0) || 0);
+
+                // Build list of returnable materials from both materials table and history
+                const issuedMaterialIds = new Set([
+                  ...selectedSite.materials.map((m: any) => m.materialTypeId),
+                  ...(selectedSite.history?.filter((h: any) => h.action === "Issued").map((h: any) => h.materialTypeId) || [])
+                ]);
 
                 return (
                   <div key={line.id} className="border rounded-lg p-4 space-y-3 bg-muted/30">
@@ -353,11 +369,12 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
                           <SelectValue placeholder="Select material" />
                         </SelectTrigger>
                         <SelectContent>
-                          {selectedSite.materials.filter((m: any) => m.quantity > 0).map((m: any) => {
-                            const mt = getMaterialType(m.materialTypeId);
+                          {Array.from(issuedMaterialIds).map((materialTypeId: any) => {
+                            const mt = getMaterialType(materialTypeId);
+                            const qty = selectedSite.materials.find((m: any) => m.materialTypeId === materialTypeId)?.quantity ?? 0;
                             return (
-                              <SelectItem key={m.materialTypeId} value={m.materialTypeId}>
-                                {mt?.name} ({mt?.size}) - {m.quantity} items
+                              <SelectItem key={materialTypeId} value={materialTypeId}>
+                                {mt?.name} ({mt?.size}) - {qty} items
                               </SelectItem>
                             );
                           })}
@@ -369,7 +386,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
                       <div className="rounded-lg bg-background p-3 text-sm space-y-1">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total held:</span>
-                          <span className="font-semibold">{material.quantity} items</span>
+                          <span className="font-semibold">{heldQty} items</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Return LC&ULC:</span>

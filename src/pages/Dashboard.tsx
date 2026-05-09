@@ -460,7 +460,7 @@ const Dashboard = () => {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Sites ({customer.sites.length})</h3>
             {customer.sites.map((site) => {
-              const totalItems = site.materials.reduce((sum, m) => sum + m.quantity, 0);
+              const totalItems = site.materials.reduce((sum, m) => sum + Math.max(0, m.quantity), 0);
               const siteCalc = calculateSiteRent(site);
               
               // Calculate total items issued and returned from history
