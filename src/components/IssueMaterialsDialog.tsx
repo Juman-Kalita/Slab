@@ -164,8 +164,9 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       return;
     }
 
-    // Validate contact number
-    if (!contactNo || contactNo.length !== 10) {
+    // Validate contact number - only required for new customers
+    const isExistingCustomer = customers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
+    if (!isExistingCustomer && contactNo && contactNo.length !== 10) {
       toast.error("Please enter a valid 10-digit contact number");
       return;
     }
@@ -236,7 +237,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               challanNo: site.challanNo || undefined,
             },
             material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined,
-            getCurrentUser()?.id,
+            undefined, // employeeId - skip to avoid FK constraint issues
             transportCharge,
             gracePeriodEndDate || undefined
           );
