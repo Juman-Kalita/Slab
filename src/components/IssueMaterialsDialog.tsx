@@ -190,7 +190,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       for (const site of validSites) {
         const validMaterials = site.materials.filter(m => m.materialTypeId && m.quantity);
         
-        // Check quantities and stock for this site
+        // Issue all materials for this site
         for (const material of validMaterials) {
           const qty = parseInt(material.quantity);
           if (isNaN(qty) || qty <= 0) {
@@ -198,19 +198,6 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             setSubmitting(false);
             return;
           }
-          
-          const available = await getAvailableStock(material.materialTypeId);
-          if (qty > available) {
-            const mt = getMaterialType(material.materialTypeId);
-            toast.error(`Not enough stock for ${mt?.name} ${mt?.size} at ${site.siteName}. Available: ${available}`);
-            setSubmitting(false);
-            return;
-          }
-        }
-
-        // Issue all materials for this site
-        for (const material of validMaterials) {
-          const qty = parseInt(material.quantity);
           // Only add transport charges to the first material to avoid duplication
           const isFirstMaterial = validMaterials.indexOf(material) === 0;
           const transportCharge = isFirstMaterial && site.transportationCharge ? parseFloat(site.transportationCharge) : undefined;
