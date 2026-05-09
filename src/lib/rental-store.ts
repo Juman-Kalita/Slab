@@ -232,25 +232,16 @@ export async function issueMaterials(
     // Check if enough inventory available
     const available = await getAvailableStock(materialTypeId);
     
-    // If no inventory record exists, create one with the material type's default inventory
+    // If no inventory record exists, initialize it and proceed
     if (available === 0) {
       const materialType = getMaterialType(materialTypeId);
       if (materialType) {
-        console.log(`Initializing inventory for ${materialType.name} with ${materialType.inventory} items`);
-        await SupabaseStore.updateInventory(materialTypeId, materialType.inventory);
-        // Re-check available stock after initialization
-        const newAvailable = await getAvailableStock(materialTypeId);
-        if (newAvailable < quantity) {
-          console.error(`Not enough stock: need ${quantity}, have ${newAvailable}`);
-          return false;
-        }
-      } else {
-        console.error(`Material type ${materialTypeId} not found`);
-        return false;
+        // Initialize inventory with default stock - don't block issuing
+        await SupabaseStore.updateInventory(materialTypeId, Math.max(materialType.inventory, quantity));
       }
     } else if (available < quantity) {
       console.error(`Not enough stock: need ${quantity}, have ${available}`);
-      return false; // Not enough stock
+      return false;
     }
 
     const customers = await getCustomers();
