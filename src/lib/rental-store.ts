@@ -838,68 +838,33 @@ export async function recordPayment(customerId: string, siteId: string, amount: 
     const site = customer.sites.find(s => s.id === siteId);
     if (!site) return false;
 
-    // Use provided date or current date
     const recordDate = paymentDate || new Date().toISOString();
-
-    // Calculate what's owed for this site
     const siteCalc = calculateSiteRent(site);
-    const siteOwed = siteCalc.remainingDue;
+    const remainingDue = siteCalc.remainingDue;
 
-    // First, try to use customer's advance deposit
-    let remainingAmount = amount;
-    let usedAdvance = 0;
-    
-    if (customer.advanceDeposit > 0 && siteOwed > 0) {
-      usedAdvance = Math.min(customer.advanceDeposit, siteOwed);
-      await SupabaseStore.updateCustomerAdvanceDeposit(
-        customer.id,
-        customer.advanceDeposit - usedAdvance
-      );
-      await SupabaseStore.updateSitePayment(siteId, site.amountPaid + usedAdvance);
-      
+    // NEUTRAL PAYMENT: just record what was received, no deposit interaction
+    // If amount > remaining due, excess goes to advance deposit
+    const amountForSite = Math.min(amount, remainingDue);
+    const excessAmount = amount - amountForSite;
+
+    if (amountForSite > 0) {
+      await SupabaseStore.updateSitePayment(siteId, site.amountPaid + amountForSite);
       await SupabaseStore.addHistoryEvent(siteId, {
         date: recordDate,
         action: "Payment",
-        amount: usedAdvance,
-        paymentMethod: "Advance Deposit",
+        amount: amountForSite,
+        paymentMethod: paymentMethod || "Cash",
+        paymentScreenshot,
         employeeId
       });
     }
 
-    // Now apply the new payment
-    const amountForSite = Math.min(remainingAmount, siteOwed - usedAdvance);
-    const excessAmount = remainingAmount - amountForSite;
-
-    if (amountForSite > 0) {
-      // Refresh site data to get updated amountPaid
-      const updatedCustomers = await getCustomers();
-      const updatedCustomer = updatedCustomers.find(c => c.id === customerId);
-      const updatedSite = updatedCustomer?.sites.find(s => s.id === siteId);
-      
-      if (updatedSite) {
-        await SupabaseStore.updateSitePayment(siteId, updatedSite.amountPaid + amountForSite);
-        await SupabaseStore.addHistoryEvent(siteId, {
-          date: recordDate,
-          action: "Payment",
-          amount: amountForSite,
-          paymentMethod: paymentMethod || "Cash",
-          paymentScreenshot: paymentScreenshot,
-          employeeId
-        });
-      }
-    }
-
-    // Store excess as customer advance deposit
+    // Store excess as advance deposit
     if (excessAmount > 0) {
-      // Refresh customer data to get updated advanceDeposit
       const updatedCustomers = await getCustomers();
       const updatedCustomer = updatedCustomers.find(c => c.id === customerId);
-      
       if (updatedCustomer) {
-        await SupabaseStore.updateCustomerAdvanceDeposit(
-          customer.id,
-          updatedCustomer.advanceDeposit + excessAmount
-        );
+        await SupabaseStore.updateCustomerAdvanceDeposit(customer.id, updatedCustomer.advanceDeposit + excessAmount);
       }
     }
 
@@ -921,6 +886,49 @@ export async function recordPayment(customerId: string, siteId: string, amount: 
   } catch (error) {
     console.error('Error recording payment:', error);
     return false;
+  }
+}
+
+// Apply advance deposit to a site (Deposit Adjustment mode)
+export async function recordDepositAdjustment(customerId: string, siteId: string, paymentDate?: string, employeeId?: string): Promise<{ success: boolean; amountApplied: number; remainingDeposit: number; remainingDue: number }> {
+  try {
+    const customers = await getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, amountApplied: 0, remainingDeposit: 0, remainingDue: 0 };
+
+    const site = customer.sites.find(s => s.id === siteId);
+    if (!site) return { success: false, amountApplied: 0, remainingDeposit: 0, remainingDue: 0 };
+
+    const recordDate = paymentDate || new Date().toISOString();
+    const siteCalc = calculateSiteRent(site);
+    const remainingDue = siteCalc.remainingDue;
+    const depositAvailable = customer.advanceDeposit;
+
+    if (depositAvailable <= 0) return { success: false, amountApplied: 0, remainingDeposit: 0, remainingDue };
+
+    const amountToApply = Math.min(depositAvailable, remainingDue);
+    const remainingDeposit = depositAvailable - amountToApply;
+    const newRemainingDue = remainingDue - amountToApply;
+
+    // Deduct from advance deposit
+    await SupabaseStore.updateCustomerAdvanceDeposit(customer.id, remainingDeposit);
+
+    // Apply to site payment
+    await SupabaseStore.updateSitePayment(siteId, site.amountPaid + amountToApply);
+
+    // Record history event
+    await SupabaseStore.addHistoryEvent(siteId, {
+      date: recordDate,
+      action: "Payment",
+      amount: amountToApply,
+      paymentMethod: "Advance Deposit",
+      employeeId
+    });
+
+    return { success: true, amountApplied: amountToApply, remainingDeposit, remainingDue: newRemainingDue };
+  } catch (error) {
+    console.error('Error recording deposit adjustment:', error);
+    return { success: false, amountApplied: 0, remainingDeposit: 0, remainingDue: 0 };
   }
 }
 
