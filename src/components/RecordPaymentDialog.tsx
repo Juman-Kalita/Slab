@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getCustomers, recordPayment, recordDepositAdjustment, calculateSiteRent, type Customer } from "@/lib/rental-store";
+import { getCurrentUser } from "@/lib/auth-service";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -132,10 +133,11 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
           return;
         }
         const finalPaymentMethod = paymentMethod === "Other" ? customPaymentMethod : paymentMethod;
+        const currentUser = getCurrentUser();
         const success = await recordPayment(
           effectiveCustomerId, selectedSiteId, amountNum,
           finalPaymentMethod, new Date(paymentDate).toISOString(),
-          undefined, undefined
+          undefined, currentUser?.id
         );
         if (success) {
           toast.success("Payment recorded successfully!");

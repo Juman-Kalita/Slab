@@ -43,8 +43,25 @@ export async function login(credentials: LoginCredentials): Promise<{ success: b
   try {
     // Hardcoded admin fallback (always works)
     if (credentials.username === 'solvix' && credentials.password === 'sahil123') {
+      // Prefer the real `users` row id so that foreign keys referencing the
+      // employee (history_events.employee_id, activity_log.user_id) resolve.
+      // A non-existent id like the old 'admin-solvix' sentinel caused every
+      // material issue to fail with a foreign-key violation. Fall back to the
+      // sentinel only when the database is unreachable.
+      let resolvedId = 'admin-solvix';
+      try {
+        const { data: dbUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('username', 'solvix')
+          .maybeSingle();
+        if (dbUser?.id) resolvedId = dbUser.id;
+      } catch {
+        // DB unreachable - keep sentinel id
+      }
+
       const user: User = {
-        id: 'admin-solvix',
+        id: resolvedId,
         username: 'solvix',
         role: 'admin',
         fullName: 'Admin User',
@@ -111,6 +128,11 @@ export async function logActivity(
   entityId: string,
   details: any
 ) {
+  // user_id is a UUID FK to `users`; skip logging for non-UUID sentinel ids
+  // (e.g. the offline admin fallback) so it never errors on the foreign key.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return;
+  }
   try {
     await supabase.from('activity_log').insert({
       user_id: userId,

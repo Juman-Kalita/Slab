@@ -1,4 +1,4 @@
-import { differenceInDays } from "date-fns";
+import { differenceInDays, addDays } from "date-fns";
 import * as SupabaseStore from './supabase-store';
 
 // Material Types Configuration
@@ -602,7 +602,187 @@ export async function recordReturn(
 }
 
 // Calculations
-const PENALTY_PER_ITEM_PER_DAY = 10;
+
+// Default rental billing window (one month) used for day-wise materials when no
+// explicit grace-period end date is set. A flat 30 days matches the amount
+// charged at issue time and each item's monthlyRate (rentPerDay × 30). When a
+// custom end date IS set, the actual day span is used instead.
+export const DEFAULT_RENTAL_DAYS = 30;
+
+// Day-wise rent uses a 30-day-month convention: the 31st of any month is never
+// billed (billing goes straight from the 30th to the 1st of the next month).
+// February is billed by its real length (28/29 days). All other months bill up
+// to the 30th. This returns the number of billable days in the INCLUSIVE range
+// [from, to] (so a same-day range is 1 day), or 0 if the range is empty.
+export function countBillableDays(from: Date, to: Date): number {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  if (end < start) return 0;
+
+  const totalInclusive = differenceInDays(end, start) + 1;
+
+  // Subtract every 31st-of-month date that falls within the range.
+  let thirtyFirsts = 0;
+  let y = start.getFullYear();
+  let m = start.getMonth();
+  while (y < end.getFullYear() || (y === end.getFullYear() && m <= end.getMonth())) {
+    const d31 = new Date(y, m, 31);
+    // If the month has fewer than 31 days, JS rolls the date into the next
+    // month, so getMonth() !== m tells us this month has no 31st.
+    if (d31.getMonth() === m && d31 >= start && d31 <= end) thirtyFirsts++;
+    m++;
+    if (m > 11) { m = 0; y++; }
+  }
+
+  return Math.max(0, totalInclusive - thirtyFirsts);
+}
+
+export interface RentBreakdownItem {
+  materialType: MaterialType;
+  issueDate: string;
+  quantityIssued: number;
+  quantityRemaining: number;
+  isAnchor: boolean;
+  amount: number;
+  calculationText: string;
+}
+
+// Single source of truth for how every issued batch of materials is billed.
+// Both the dues total (calculateSiteRent) and the on-screen breakdown cards use
+// this so they can never diverge.
+//
+// Rules:
+//   - A batch is an "anchor" if NOTHING was held at the site when it was issued
+//     (the very first issue, or a re-issue after everything was returned). An
+//     anchor starts a grace period and is billed a flat set price for it
+//     (monthly rate, or rate × 30, or rate × custom-day-span).
+//   - A batch issued WHILE materials were already held is not an anchor and is
+//     billed purely day-wise from its issue date — no grace period.
+//   - After a batch's grace period passes, the still-held quantity keeps billing
+//     day-wise (this is rent, not a penalty).
+//   - Returns are applied FIFO to the oldest still-open batch of that material
+//     type, so day-wise charges only continue on quantities still on site.
+export function getRentBreakdown(site: Site, today: Date = new Date()): RentBreakdownItem[] {
+  const customEnd = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : null;
+
+  // Replay issues + returns in chronological order (stable on equal dates).
+  const events = site.history
+    .filter(h => h.action === "Issued" || h.action === "Returned")
+    .map((h, i) => ({ h, i }))
+    .sort((a, b) => {
+      const diff = new Date(a.h.date).getTime() - new Date(b.h.date).getTime();
+      return diff !== 0 ? diff : a.i - b.i;
+    })
+    .map(x => x.h);
+
+  interface Batch {
+    materialTypeId: string;
+    issueDate: string;
+    quantityIssued: number;
+    quantityRemaining: number;
+    isAnchor: boolean;
+  }
+  const batches: Batch[] = [];
+  let held = 0;
+  let dateKey: string | null = null;
+  let heldAtDateStart = 0;
+
+  for (const ev of events) {
+    const key = new Date(ev.date).toDateString();
+    if (key !== dateKey) {
+      dateKey = key;
+      heldAtDateStart = held; // anchor decision is based on what was held when the day began
+    }
+
+    if (ev.action === "Issued" && ev.materialTypeId && ev.quantity) {
+      batches.push({
+        materialTypeId: ev.materialTypeId,
+        issueDate: ev.date,
+        quantityIssued: ev.quantity,
+        quantityRemaining: ev.quantity,
+        isAnchor: heldAtDateStart === 0,
+      });
+      held += ev.quantity;
+    } else if (ev.action === "Returned" && ev.materialTypeId) {
+      let leaving = (ev.quantity || 0) + (ev.quantityLost || 0);
+      held = Math.max(0, held - leaving);
+      for (const b of batches) {
+        if (leaving <= 0) break;
+        if (b.materialTypeId === ev.materialTypeId && b.quantityRemaining > 0) {
+          const dec = Math.min(b.quantityRemaining, leaving);
+          b.quantityRemaining -= dec;
+          leaving -= dec;
+        }
+      }
+    }
+  }
+
+  // Merge batches sharing material type + issue date (e.g. multiple lines added
+  // together) for a tidy display.
+  const merged = new Map<string, Batch>();
+  for (const b of batches) {
+    const k = `${b.materialTypeId}-${b.issueDate}`;
+    const m = merged.get(k);
+    if (m) {
+      m.quantityIssued += b.quantityIssued;
+      m.quantityRemaining += b.quantityRemaining;
+      m.isAnchor = m.isAnchor || b.isAnchor;
+    } else {
+      merged.set(k, { ...b });
+    }
+  }
+
+  const items: RentBreakdownItem[] = [];
+  for (const b of merged.values()) {
+    const mt = getMaterialType(b.materialTypeId);
+    if (!mt) continue;
+    const issueDate = new Date(b.issueDate);
+    const parts: string[] = [];
+    let amount = 0;
+
+    if (b.isAnchor) {
+      const graceEnd = customEnd ?? addDays(issueDate, DEFAULT_RENTAL_DAYS);
+      // Flat "set price" for the grace period, on the issued quantity.
+      if (mt.gracePeriodDays > 0 && !customEnd) {
+        amount += b.quantityIssued * mt.monthlyRate;
+        parts.push(`${b.quantityIssued} × ₹${mt.monthlyRate}/month`);
+      } else {
+        // Flat 30-day month when no custom end; otherwise day-wise to the end
+        // date using the 30-day-month convention (skips 31sts).
+        const graceDays = customEnd ? countBillableDays(issueDate, graceEnd) : DEFAULT_RENTAL_DAYS;
+        amount += b.quantityIssued * mt.rentPerDay * graceDays;
+        parts.push(`${b.quantityIssued} × ₹${mt.rentPerDay} × ${graceDays} days`);
+      }
+      // After the grace period: day-wise on the quantity still held (the day
+      // after grace end through today, skipping 31sts).
+      if (b.quantityRemaining > 0) {
+        const extraDays = countBillableDays(addDays(graceEnd, 1), today);
+        if (extraDays > 0) {
+          amount += b.quantityRemaining * mt.rentPerDay * extraDays;
+          parts.push(`${b.quantityRemaining} × ₹${mt.rentPerDay} × ${extraDays} days`);
+        }
+      }
+    } else {
+      // Non-anchor: day-wise from issue date on the quantity still held,
+      // using the 30-day-month convention.
+      const days = countBillableDays(issueDate, today);
+      amount += b.quantityRemaining * mt.rentPerDay * days;
+      parts.push(`${b.quantityRemaining} × ₹${mt.rentPerDay} × ${days} days`);
+    }
+
+    items.push({
+      materialType: mt,
+      issueDate: b.issueDate,
+      quantityIssued: b.quantityIssued,
+      quantityRemaining: b.quantityRemaining,
+      isAnchor: b.isAnchor,
+      amount,
+      calculationText: `${parts.join(" + ")} = ₹${amount.toFixed(2)}`,
+    });
+  }
+
+  return items;
+}
 
 // Calculate rent for a specific site
 export function calculateSiteRent(site: Site): {
@@ -626,6 +806,7 @@ export function calculateSiteRent(site: Site): {
     rentAmount: number;
     issueLoadingCharge: number;
   }>;
+  rentBreakdown: RentBreakdownItem[];
 } {
   const days = differenceInDays(new Date(), new Date(site.issueDate));
   
@@ -641,8 +822,10 @@ export function calculateSiteRent(site: Site): {
     isWithinGracePeriod = new Date() <= new Date(site.gracePeriodEndDate);
     daysOverdue = Math.max(0, differenceInDays(new Date(), new Date(site.gracePeriodEndDate)));
   } else {
-    // Fallback to material type grace period (for backward compatibility)
-    let maxGracePeriod = 20;
+    // No explicit end date: the grace window is the default 30-day month that
+    // the base rent already charges for. Additional day-wise rent only starts
+    // AFTER this window, so days within the first month are never double-billed.
+    let maxGracePeriod = DEFAULT_RENTAL_DAYS;
     site.materials.forEach(m => {
       const mt = getMaterialType(m.materialTypeId);
       if (mt && mt.gracePeriodDays > maxGracePeriod) {
@@ -671,44 +854,11 @@ export function calculateSiteRent(site: Site): {
   let lostItemsPenalty = 0;
   const materialBreakdown: Array<any> = [];
   
-  // Dynamically recalculate rent from history events using new billing logic
-  const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : new Date();
-  const siteStartDate = new Date(site.issueDate);
-  
-  // Group issued materials by materialTypeId + issueDate from history
-  const issuedGroups: Map<string, { materialTypeId: string; quantity: number; issueDate: string }> = new Map();
-  site.history.forEach(event => {
-    if (event.action === "Issued" && event.materialTypeId && event.quantity) {
-      const key = `${event.materialTypeId}-${event.date}`;
-      const existing = issuedGroups.get(key);
-      if (existing) {
-        existing.quantity += event.quantity;
-      } else {
-        issuedGroups.set(key, { materialTypeId: event.materialTypeId, quantity: event.quantity, issueDate: event.date });
-      }
-    }
-  });
-  
-  let dynamicRentAmount = 0;
-  issuedGroups.forEach(group => {
-    const mt = getMaterialType(group.materialTypeId);
-    if (!mt) return;
-    const issueDate = new Date(group.issueDate);
-    const isFirstIssue = issueDate.toDateString() === siteStartDate.toDateString();
-    
-    let groupRent: number;
-    if (isFirstIssue && mt.gracePeriodDays > 0 && !site.gracePeriodEndDate) {
-      // Monthly rate ONLY when no explicit end date is set (open-ended grace period)
-      groupRent = group.quantity * mt.monthlyRate;
-    } else {
-      // Day-wise calculation: for plates, subsequent issues, OR when end date is explicitly set
-      const days = differenceInDays(endDate, issueDate) + 1;
-      groupRent = group.quantity * mt.rentPerDay * days;
-    }
-    dynamicRentAmount += groupRent;
-  });
-  
-  const rentAmount = dynamicRentAmount;
+  // Per-batch rent (grace-month set price + day-wise after grace, day-wise for
+  // materials added while others were already held). This is the single source
+  // of truth shared with the on-screen breakdown cards.
+  const rentBreakdown = getRentBreakdown(site);
+  const rentAmount = rentBreakdown.reduce((sum, item) => sum + item.amount, 0);
   const issueLoadingCharges = site.originalIssueLC;
   
   // Build material breakdown
@@ -768,19 +918,11 @@ export function calculateSiteRent(site: Site): {
   
   const transportCharges = issueTransportCharges + returnTransportCharges;
   
-  // Calculate additional rent after grace period
-  let penaltyAmount = 0;
-  if (daysOverdue > 0) {
-    // For each material currently at site, charge daily rate × quantity × days overdue
-    site.materials.forEach(material => {
-      const materialType = getMaterialType(material.materialTypeId);
-      if (materialType) {
-        penaltyAmount += material.quantity * materialType.rentPerDay * daysOverdue;
-      }
-    });
-  }
-  
-  // Calculate base charges (includes issue transport charges and additional rent after grace period)
+  // Additional rent after the grace period is already included in `rentAmount`
+  // (computed per batch in getRentBreakdown), so there is no separate penalty.
+  const penaltyAmount = 0;
+
+  // Calculate base charges (rentAmount already includes day-wise rent after grace)
   const baseCharges = rentAmount + issueLoadingCharges + issueTransportCharges + returnLoadingCharges + returnTransportCharges + lostItemsPenalty + penaltyAmount;
   const totalRequired = Math.max(0, baseCharges - site.amountPaid);
   const remainingDue = totalRequired;
@@ -800,7 +942,8 @@ export function calculateSiteRent(site: Site): {
     amountPaid: site.amountPaid,
     remainingDue,
     isFullyPaid,
-    materialBreakdown
+    materialBreakdown,
+    rentBreakdown
   };
 }
 

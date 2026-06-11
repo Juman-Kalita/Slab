@@ -36,7 +36,7 @@ const Dashboard = () => {
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [issueMoreOpen, setIssueMoreOpen] = useState(false);
-  const [selectedSite, setSelectedSite] = useState<{ siteName: string; location: string } | null>(null);
+  const [selectedSite, setSelectedSite] = useState<{ siteName: string; location: string; materials?: any[]; gracePeriodEndDate?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState({ totalCustomers: 0, totalItemsRented: 0, totalPendingAmount: 0 });
@@ -485,7 +485,7 @@ const Dashboard = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedSite({ siteName: site.siteName, location: site.location });
+                            setSelectedSite({ siteName: site.siteName, location: site.location, materials: site.materials, gracePeriodEndDate: site.gracePeriodEndDate });
                             setIssueMoreOpen(true);
                           }}
                           className="gap-1 bg-accent/10 hover:bg-accent/20"
@@ -701,97 +701,54 @@ const Dashboard = () => {
                     })()}
 
                     {/* Materials at this site */}
-                    {(() => {
-                      const issuedEvents = site.history.filter(h => h.action === "Issued" && h.materialTypeId);
-                      return issuedEvents.length > 0;
-                    })() && (
+                    {siteCalc.rentBreakdown.length > 0 && (
                       <div className="border-t pt-4">
                         <h5 className="font-semibold mb-3">Materials ({totalItems} items)</h5>
                         <div className="space-y-2">
-                          {(() => {
-                            // Group materials by materialTypeId and issueDate from history
-                            const issuedEvents = site.history.filter(h => h.action === "Issued" && h.materialTypeId);
-                            const materialGroups = new Map<string, { materialTypeId: string; issueDate: string; quantity: number; hasOwnLabor: boolean }>();
-                            
-                            issuedEvents.forEach(event => {
-                              if (!event.materialTypeId || !event.quantity) return;
-                              const key = `${event.materialTypeId}-${event.date}`;
-                              const existing = materialGroups.get(key);
-                              if (existing) {
-                                existing.quantity += event.quantity;
-                              } else {
-                                materialGroups.set(key, {
-                                  materialTypeId: event.materialTypeId,
-                                  issueDate: event.date,
-                                  quantity: event.quantity,
-                                  hasOwnLabor: event.hasOwnLabor || false
-                                });
-                              }
-                            });
-                            
-                            // Show ALL issued materials (including returned ones)
-                            const materialsToShow = Array.from(materialGroups.values());
-                            
-                            return materialsToShow.map((group, index) => {
-                              const materialType = getMaterialType(group.materialTypeId);
-                              if (!materialType) return null;
-                              
-                              // Calculate days and total
-                              const issueDate = new Date(group.issueDate);
-                              const siteStartDate = new Date(site.issueDate);
-                              const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : new Date();
-                              
-                              // Check if this is the first issue (same date as site creation)
-                              const isFirstIssue = issueDate.toDateString() === siteStartDate.toDateString();
-                              
-                              let totalAmount: number;
-                              let calculationText: string;
-                              
-                              if (isFirstIssue && materialType.gracePeriodDays > 0 && !site.gracePeriodEndDate) {
-                                // Monthly rate only when no explicit end date (open-ended)
-                                totalAmount = group.quantity * materialType.monthlyRate;
-                                calculationText = `${group.quantity} × ₹${materialType.monthlyRate}/month = ₹${totalAmount.toFixed(2)}`;
-                              } else {
-                                // Day-wise for plates, subsequent issues, or when end date is set
-                                const days = differenceInDays(endDate, issueDate) + 1;
-                                totalAmount = group.quantity * materialType.rentPerDay * days;
-                                calculationText = `${group.quantity} × ₹${materialType.rentPerDay} × ${days} days = ₹${totalAmount.toFixed(2)}`;
-                              }
-                              
-                              return (
-                                <div key={`${group.materialTypeId}-${group.issueDate}-${index}`} className="p-3 bg-muted rounded space-y-2">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <div className="font-medium">{materialType.name} ({materialType.size})</div>
-                                      <div className="text-sm text-muted-foreground">Quantity: {group.quantity}</div>
-                                      {isFirstIssue && materialType.gracePeriodDays > 0 && (
-                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">First Issue - Monthly rate</div>
-                                      )}
+                          {siteCalc.rentBreakdown.map((item, index) => {
+                            const materialType = item.materialType;
+                            const issueDate = new Date(item.issueDate);
+                            const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : null;
+                            const isMonthlyAnchor = item.isAnchor && materialType.gracePeriodDays > 0 && !site.gracePeriodEndDate;
+
+                            return (
+                              <div key={`${materialType.id}-${item.issueDate}-${index}`} className="p-3 bg-muted rounded space-y-2">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="font-medium">{materialType.name} ({materialType.size})</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      Quantity: {item.quantityIssued}
+                                      {item.quantityRemaining !== item.quantityIssued && ` (held: ${item.quantityRemaining})`}
                                     </div>
-                                    <div className="flex-1 text-center">
-                                      <div className="text-xs text-muted-foreground">Issued</div>
-                                      <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
-                                      {site.gracePeriodEndDate && (
-                                        <>
-                                          <div className="text-xs text-muted-foreground mt-1">End Date</div>
-                                          <div className="text-sm font-medium">{format(endDate, "dd MMM yyyy")}</div>
-                                        </>
-                                      )}
-                                    </div>
-                                    <div className="flex-1 text-right">
-                                      <div className="text-sm font-semibold">₹{materialType.rentPerDay}/day</div>
-                                    </div>
+                                    {isMonthlyAnchor ? (
+                                      <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">New grace period - Monthly rate</div>
+                                    ) : !item.isAnchor ? (
+                                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">Added while held - Day-wise</div>
+                                    ) : null}
                                   </div>
-                                  <div className="text-xs bg-background p-2 rounded">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Calculation:</span>
-                                      <span className="font-medium">{calculationText}</span>
-                                    </div>
+                                  <div className="flex-1 text-center">
+                                    <div className="text-xs text-muted-foreground">Issued</div>
+                                    <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
+                                    {endDate && (
+                                      <>
+                                        <div className="text-xs text-muted-foreground mt-1">End Date</div>
+                                        <div className="text-sm font-medium">{format(endDate, "dd MMM yyyy")}</div>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 text-right">
+                                    <div className="text-sm font-semibold">₹{materialType.rentPerDay}/day</div>
                                   </div>
                                 </div>
-                              );
-                            });
-                          })()}
+                                <div className="text-xs bg-background p-2 rounded">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Calculation:</span>
+                                    <span className="font-medium">{item.calculationText}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -912,6 +869,8 @@ const Dashboard = () => {
             customerName={customer.name}
             siteName={selectedSite.siteName}
             location={selectedSite.location}
+            allMaterialsReturned={(selectedSite.materials ?? []).every(m => Math.max(0, m.quantity) === 0)}
+            currentGracePeriodEndDate={selectedSite.gracePeriodEndDate}
           />
         )}
       </div>

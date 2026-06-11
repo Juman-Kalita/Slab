@@ -37,6 +37,7 @@ interface SiteLine {
 const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsDialogProps) => {
   const [customerName, setCustomerName] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [gracePeriodStartDate, setGracePeriodStartDate] = useState("");
   const [gracePeriodEndDate, setGracePeriodEndDate] = useState("");
   const [siteLines, setSiteLines] = useState<SiteLine[]>([
     {
@@ -202,13 +203,15 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
           const isFirstMaterial = validMaterials.indexOf(material) === 0;
           const transportCharge = isFirstMaterial && site.transportationCharge ? parseFloat(site.transportationCharge) : undefined;
           
+          const currentUser = getCurrentUser();
+          const effectiveStartDate = gracePeriodStartDate || issueDate;
           const success = await issueMaterials(
             customerName,
             site.siteName,
             site.location,
             material.materialTypeId,
             qty,
-            issueDate,
+            effectiveStartDate,
             material.hasOwnLabor,
             0, // No deposit during issuance
             {
@@ -224,7 +227,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
               challanNo: site.challanNo || undefined,
             },
             material.customLoadingCharge ? parseFloat(material.customLoadingCharge) : undefined,
-            undefined, // employeeId - skip to avoid FK constraint issues
+            currentUser?.id, // pass employee ID for activity tracking
             transportCharge,
             gracePeriodEndDate || undefined
           );
@@ -252,6 +255,7 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
       setAddress("");
       setReferral("");
       setIssueDate(new Date().toISOString().split("T")[0]);
+      setGracePeriodStartDate("");
       setGracePeriodEndDate("");
       setSiteLines([{
         id: crypto.randomUUID(),
@@ -297,9 +301,9 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="issueDate">Issue Date (Grace Period Start)</Label>
+              <Label htmlFor="issueDate">Issue Date</Label>
               <Input
                 id="issueDate"
                 type="date"
@@ -309,13 +313,26 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gracePeriodEndDate">End Date (Grace Period End)</Label>
+              <Label htmlFor="gracePeriodStartDate">Grace Period Start Date</Label>
+              <Input
+                id="gracePeriodStartDate"
+                type="date"
+                value={gracePeriodStartDate}
+                onChange={(e) => setGracePeriodStartDate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to use Issue Date
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gracePeriodEndDate">Grace Period End Date</Label>
               <Input
                 id="gracePeriodEndDate"
                 type="date"
                 value={gracePeriodEndDate}
                 onChange={(e) => setGracePeriodEndDate(e.target.value)}
-                min={issueDate}
+                min={gracePeriodStartDate || issueDate}
               />
               <p className="text-xs text-muted-foreground">
                 After this date, additional rent charges apply daily

@@ -143,6 +143,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
         // Only add transport charges to the first material line to avoid duplication
         const chargesForThisLine = successCount === 0 ? transportChargesValue : undefined;
         
+        const currentUser = getCurrentUser();
         const success = await recordReturn(
           effectiveCustomerId, 
           selectedSiteId, 
@@ -151,7 +152,7 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
           qtyLost, 
           line.hasOwnLabor, 
           returnDate,
-          undefined, // skip employeeId to avoid FK issues
+          currentUser?.id, // pass employee ID for activity tracking
           chargesForThisLine
         );
         

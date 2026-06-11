@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { issueMaterials, MATERIAL_TYPES, getMaterialType, getAvailableStock, getInventory } from "@/lib/rental-store";
+import { getCurrentUser } from "@/lib/auth-service";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -16,6 +17,8 @@ interface IssueMoreMaterialsDialogProps {
   customerName: string;
   siteName: string;
   location: string;
+  allMaterialsReturned?: boolean; // show grace period option only when all returned
+  currentGracePeriodEndDate?: string; // existing grace period end date on the site
 }
 
 interface MaterialLine {
@@ -26,8 +29,10 @@ interface MaterialLine {
   customLoadingCharge: string;
 }
 
-const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName, siteName, location }: IssueMoreMaterialsDialogProps) => {
+const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName, siteName, location, allMaterialsReturned, currentGracePeriodEndDate }: IssueMoreMaterialsDialogProps) => {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [gracePeriodStartDate, setGracePeriodStartDate] = useState("");
+  const [gracePeriodEndDate, setGracePeriodEndDate] = useState("");
   const [materialLines, setMaterialLines] = useState<MaterialLine[]>([
     { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }
   ]);
@@ -106,6 +111,9 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
       }
 
       let successCount = 0;
+      const currentUser = getCurrentUser();
+      // Use gracePeriodStartDate as the effective rent-start date if set, otherwise use issueDate
+      const effectiveStartDate = gracePeriodStartDate || issueDate;
       for (const line of validLines) {
         const qty = parseInt(line.quantity);
         const success = await issueMaterials(
@@ -114,15 +122,15 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
           location,
           line.materialTypeId, 
           qty, 
-          issueDate, 
+          effectiveStartDate, 
           line.hasOwnLabor,
           0,
           undefined,
           undefined,
           line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined,
-          undefined, // No employee ID
+          currentUser?.id, // pass employee ID for activity tracking
           undefined, // No transport charges
-          undefined  // No grace period end date
+          allMaterialsReturned ? (gracePeriodEndDate || undefined) : undefined // Only set new grace period if all returned
         );
         if (success) {
           successCount++;
@@ -131,6 +139,8 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
 
       toast.success(`Added ${successCount} material types to ${siteName}`);
       setIssueDate(new Date().toISOString().split("T")[0]);
+      setGracePeriodStartDate("");
+      setGracePeriodEndDate("");
       setTransportationCharge("");
       setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]);
       onSuccess();
@@ -164,6 +174,46 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
               onChange={(e) => setIssueDate(e.target.value)}
             />
           </div>
+
+          {/* Grace period only applies when the site is starting fresh (nothing
+              currently held). If materials are already held, the new materials
+              are billed day-wise, so these fields are hidden. */}
+          {allMaterialsReturned ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="gracePeriodStartDate">Grace Period Start Date</Label>
+                <Input
+                  id="gracePeriodStartDate"
+                  type="date"
+                  value={gracePeriodStartDate}
+                  onChange={(e) => setGracePeriodStartDate(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to use Issue Date as start
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gracePeriodEndDate">Grace Period End Date</Label>
+                <Input
+                  id="gracePeriodEndDate"
+                  type="date"
+                  value={gracePeriodEndDate}
+                  onChange={(e) => setGracePeriodEndDate(e.target.value)}
+                  min={gracePeriodStartDate || issueDate}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty for no fixed end date (monthly rate applies)
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+              Materials are already held at this site, so these new materials are
+              billed <span className="font-semibold">day-wise</span> from the issue
+              date. The grace period applies only when the site starts fresh (all
+              materials returned).
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="transportationCharge">Transportation Charge (₹) - Optional</Label>

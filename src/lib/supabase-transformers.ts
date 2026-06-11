@@ -68,6 +68,16 @@ export function dbToHistoryEvent(dbEvent: any): HistoryEvent {
 
 // Transform app format to database format (camelCase -> snake_case)
 
+// employee_id / user_id columns are UUIDs with a foreign key to `users`. Some
+// sessions (e.g. the hardcoded admin fallback when offline) carry a non-UUID
+// sentinel id. Sending that to the DB triggers a foreign-key / invalid-uuid
+// error that aborts the whole insert, so coerce anything that isn't a valid
+// UUID to null and let the row insert succeed without employee attribution.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function asUuidOrNull(value: unknown): string | null {
+  return typeof value === 'string' && UUID_RE.test(value) ? value : null;
+}
+
 export function customerToDb(customer: Partial<Customer>): any {
   return {
     id: customer.id,
@@ -112,18 +122,24 @@ export function materialToDb(material: Partial<MaterialItem>, siteId: string): a
 }
 
 export function historyEventToDb(event: Partial<HistoryEvent>, siteId: string): any {
+  // IMPORTANT: emit `null` (never `undefined`) for absent fields. JSON.stringify
+  // drops keys whose value is `undefined`, which makes the rows of a bulk insert
+  // have differing key sets (e.g. an "Issued" row vs a "Payment" row). PostgREST
+  // rejects that with PGRST102 "All object keys must match", causing a partial
+  // failure where materials get inserted but the history event does not. Using a
+  // complete, uniform key set on every row keeps bulk inserts valid.
   return {
     site_id: siteId,
-    date: event.date,
-    action: event.action,
-    material_type_id: event.materialTypeId,
-    quantity: event.quantity,
-    amount: event.amount,
-    has_own_labor: event.hasOwnLabor,
-    quantity_lost: event.quantityLost,
-    payment_method: event.paymentMethod,
-    payment_screenshot: event.paymentScreenshot,
-    employee_id: event.employeeId,
-    transport_charges: event.transportCharges
+    date: event.date ?? null,
+    action: event.action ?? null,
+    material_type_id: event.materialTypeId ?? null,
+    quantity: event.quantity ?? null,
+    amount: event.amount ?? null,
+    has_own_labor: event.hasOwnLabor ?? null,
+    quantity_lost: event.quantityLost ?? null,
+    payment_method: event.paymentMethod ?? null,
+    payment_screenshot: event.paymentScreenshot ?? null,
+    employee_id: asUuidOrNull(event.employeeId),
+    transport_charges: event.transportCharges ?? null
   };
 }
