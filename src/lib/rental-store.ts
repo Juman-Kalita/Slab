@@ -1,4 +1,4 @@
-import { differenceInDays, addDays } from "date-fns";
+import { differenceInDays, addMonths, subDays } from "date-fns";
 import * as SupabaseStore from './supabase-store';
 
 // Material Types Configuration
@@ -603,38 +603,37 @@ export async function recordReturn(
 
 // Calculations
 
-// Default rental billing window (one month) used for day-wise materials when no
-// explicit grace-period end date is set. A flat 30 days matches the amount
-// charged at issue time and each item's monthlyRate (rentPerDay × 30). When a
-// custom end date IS set, the actual day span is used instead.
+// Default rental window (one month). Only used by the legacy grace-window fields
+// still returned by calculateSiteRent (isWithinGracePeriod / daysOverdue); the
+// actual rent is computed per batch in getRentBreakdown.
 export const DEFAULT_RENTAL_DAYS = 30;
 
-// Day-wise rent uses a 30-day-month convention: the 31st of any month is never
-// billed (billing goes straight from the 30th to the 1st of the next month).
-// February is billed by its real length (28/29 days). All other months bill up
-// to the 30th. This returns the number of billable days in the INCLUSIVE range
-// [from, to] (so a same-day range is 1 day), or 0 if the range is empty.
-export function countBillableDays(from: Date, to: Date): number {
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-  if (end < start) return 0;
-
-  const totalInclusive = differenceInDays(end, start) + 1;
-
-  // Subtract every 31st-of-month date that falls within the range.
-  let thirtyFirsts = 0;
-  let y = start.getFullYear();
-  let m = start.getMonth();
-  while (y < end.getFullYear() || (y === end.getFullYear() && m <= end.getMonth())) {
-    const d31 = new Date(y, m, 31);
-    // If the month has fewer than 31 days, JS rolls the date into the next
-    // month, so getMonth() !== m tells us this month has no 31st.
-    if (d31.getMonth() === m && d31 >= start && d31 <= end) thirtyFirsts++;
-    m++;
-    if (m > 11) { m = 0; y++; }
+// --- Date helpers for the billing engine ------------------------------------
+// Normalize to a local date-only value (drop any time component).
+function dateOnly(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+// Inclusive calendar-day count: same day = 1 day, consecutive days = 2, ...
+// Uses real month lengths (30, 31, or Feb's 28/29) — no day-count convention.
+function inclusiveDays(from: Date, to: Date): number {
+  return Math.max(0, differenceInDays(dateOnly(to), dateOnly(from)) + 1);
+}
+// The monthly cycle that contains `date`, given the billing anchor. Cycles run
+// from the anchor day-of-month to the day before the next anniversary (an
+// anchor of the 15th gives cycles 15th → 14th). addMonths clamps to month end,
+// so a 31st anchor bills on the last day of shorter months.
+function cycleStartContaining(date: Date, anchor: Date): Date {
+  const d = dateOnly(date);
+  const base = dateOnly(anchor);
+  let cs = base;
+  let k = 0;
+  while (k < 600) {
+    const next = addMonths(base, k + 1);
+    if (next > d) break;
+    cs = next;
+    k++;
   }
-
-  return Math.max(0, totalInclusive - thirtyFirsts);
+  return cs;
 }
 
 export interface RentBreakdownItem {
@@ -643,7 +642,8 @@ export interface RentBreakdownItem {
   quantityIssued: number;
   quantityRemaining: number;
   isAnchor: boolean;
-  amount: number;
+  amount: number;        // net rent for this batch (after any early-return refund)
+  refund: number;        // early-return refund subtracted from this batch (>= 0)
   calculationText: string;
 }
 
@@ -651,21 +651,27 @@ export interface RentBreakdownItem {
 // Both the dues total (calculateSiteRent) and the on-screen breakdown cards use
 // this so they can never diverge.
 //
-// Rules:
-//   - A batch is an "anchor" if NOTHING was held at the site when it was issued
-//     (the very first issue, or a re-issue after everything was returned). An
-//     anchor starts a grace period and is billed a flat set price for it
-//     (monthly rate, or rate × 30, or rate × custom-day-span).
-//   - A batch issued WHILE materials were already held is not an anchor and is
-//     billed purely day-wise from its issue date — no grace period.
-//   - After a batch's grace period passes, the still-held quantity keeps billing
-//     day-wise (this is rent, not a penalty).
-//   - Returns are applied FIFO to the oldest still-open batch of that material
-//     type, so day-wise charges only continue on quantities still on site.
+// Two families of materials:
+//   - PLATES (gracePeriodDays === 0): pure day-wise. Each unit bills
+//     rentPerDay for every (inclusive) day it is held — issue → return, or
+//     issue → today if still held. No month, no grace.
+//   - MONTHLY materials (gracePeriodDays > 0): recurring monthly billing.
+//       * The site's monthly cycle is anchored on the FIRST monthly-material
+//         issue date (e.g. the 15th → cycles run 15th to 14th).
+//       * A batch issued at a cycle start is charged a full monthlyRate for
+//         that cycle; a batch added mid-cycle is prorated (rentPerDay × days)
+//         to that cycle's end, then bills full months afterwards.
+//       * Every still-held batch is charged a full monthlyRate again at each
+//         new cycle (the bill grows monthly on its own).
+//       * The FIRST cycle (the anchor month) is FIXED — never refunded.
+//       * On early return in a later cycle, the unused tail of the current
+//         cycle (return date → cycle end) is refunded at rentPerDay.
+//   - Returns are applied FIFO to the oldest still-open batch.
 export function getRentBreakdown(site: Site, today: Date = new Date()): RentBreakdownItem[] {
-  const customEnd = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : null;
+  const tToday = dateOnly(today);
 
-  // Replay issues + returns in chronological order (stable on equal dates).
+  // Replay issues + returns in chronological order (stable on equal dates) into
+  // FIFO lots, recording the date each lot left the site.
   const events = site.history
     .filter(h => h.action === "Issued" || h.action === "Returned")
     .map((h, i) => ({ h, i }))
@@ -675,111 +681,150 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
     })
     .map(x => x.h);
 
-  interface Batch {
-    materialTypeId: string;
-    issueDate: string;
-    quantityIssued: number;
-    quantityRemaining: number;
-    isAnchor: boolean;
-  }
-  const batches: Batch[] = [];
-  let held = 0;
-  let dateKey: string | null = null;
-  let heldAtDateStart = 0;
-
+  interface Lot { materialTypeId: string; issueDate: Date; qty: number; leaveDate: Date | null; }
+  const lots: Lot[] = [];
   for (const ev of events) {
-    const key = new Date(ev.date).toDateString();
-    if (key !== dateKey) {
-      dateKey = key;
-      heldAtDateStart = held; // anchor decision is based on what was held when the day began
-    }
-
     if (ev.action === "Issued" && ev.materialTypeId && ev.quantity) {
-      batches.push({
-        materialTypeId: ev.materialTypeId,
-        issueDate: ev.date,
-        quantityIssued: ev.quantity,
-        quantityRemaining: ev.quantity,
-        isAnchor: heldAtDateStart === 0,
-      });
-      held += ev.quantity;
+      lots.push({ materialTypeId: ev.materialTypeId, issueDate: dateOnly(new Date(ev.date)), qty: ev.quantity, leaveDate: null });
     } else if (ev.action === "Returned" && ev.materialTypeId) {
       let leaving = (ev.quantity || 0) + (ev.quantityLost || 0);
-      held = Math.max(0, held - leaving);
-      for (const b of batches) {
+      const leaveDate = dateOnly(new Date(ev.date));
+      for (const lot of lots) {
         if (leaving <= 0) break;
-        if (b.materialTypeId === ev.materialTypeId && b.quantityRemaining > 0) {
-          const dec = Math.min(b.quantityRemaining, leaving);
-          b.quantityRemaining -= dec;
-          leaving -= dec;
+        if (lot.materialTypeId === ev.materialTypeId && lot.leaveDate === null) {
+          if (lot.qty <= leaving) {
+            lot.leaveDate = leaveDate;
+            leaving -= lot.qty;
+          } else {
+            // Split: the returned portion gets a leave date, the rest stays held.
+            lots.push({ materialTypeId: lot.materialTypeId, issueDate: lot.issueDate, qty: leaving, leaveDate });
+            lot.qty -= leaving;
+            leaving = 0;
+          }
         }
       }
     }
   }
 
-  // Merge batches sharing material type + issue date (e.g. multiple lines added
-  // together) for a tidy display.
-  const merged = new Map<string, Batch>();
-  for (const b of batches) {
-    const k = `${b.materialTypeId}-${b.issueDate}`;
-    const m = merged.get(k);
-    if (m) {
-      m.quantityIssued += b.quantityIssued;
-      m.quantityRemaining += b.quantityRemaining;
-      m.isAnchor = m.isAnchor || b.isAnchor;
-    } else {
-      merged.set(k, { ...b });
+  // Monthly cycle anchor = earliest issue among monthly materials at this site.
+  let anchor: Date | null = null;
+  for (const lot of lots) {
+    const mt = getMaterialType(lot.materialTypeId);
+    if (mt && mt.gracePeriodDays > 0 && (!anchor || lot.issueDate < anchor)) {
+      anchor = lot.issueDate;
     }
   }
 
-  const items: RentBreakdownItem[] = [];
-  for (const b of merged.values()) {
-    const mt = getMaterialType(b.materialTypeId);
+  // Compute each lot's rent, then group by (material type + issue date).
+  interface Group { mt: MaterialType; issueDate: Date; qtyIssued: number; qtyRemaining: number; amount: number; refund: number; parts: string[]; }
+  const groups = new Map<string, Group>();
+
+  for (const lot of lots) {
+    const mt = getMaterialType(lot.materialTypeId);
     if (!mt) continue;
-    const issueDate = new Date(b.issueDate);
-    const parts: string[] = [];
+    const isMonthly = mt.gracePeriodDays > 0;
     let amount = 0;
+    let refund = 0;
+    const parts: string[] = [];
 
-    if (b.isAnchor) {
-      const graceEnd = customEnd ?? addDays(issueDate, DEFAULT_RENTAL_DAYS);
-      // Flat "set price" for the grace period, on the issued quantity.
-      if (mt.gracePeriodDays > 0 && !customEnd) {
-        amount += b.quantityIssued * mt.monthlyRate;
-        parts.push(`${b.quantityIssued} × ₹${mt.monthlyRate}/month`);
-      } else {
-        // Flat 30-day month when no custom end; otherwise day-wise to the end
-        // date using the 30-day-month convention (skips 31sts).
-        const graceDays = customEnd ? countBillableDays(issueDate, graceEnd) : DEFAULT_RENTAL_DAYS;
-        amount += b.quantityIssued * mt.rentPerDay * graceDays;
-        parts.push(`${b.quantityIssued} × ₹${mt.rentPerDay} × ${graceDays} days`);
-      }
-      // After the grace period: day-wise on the quantity still held (the day
-      // after grace end through today, skipping 31sts).
-      if (b.quantityRemaining > 0) {
-        const extraDays = countBillableDays(addDays(graceEnd, 1), today);
-        if (extraDays > 0) {
-          amount += b.quantityRemaining * mt.rentPerDay * extraDays;
-          parts.push(`${b.quantityRemaining} × ₹${mt.rentPerDay} × ${extraDays} days`);
-        }
-      }
+    if (!isMonthly) {
+      // PLATES — pure day-wise (return day itself is not charged).
+      const end = lot.leaveDate ? subDays(lot.leaveDate, 1) : tToday;
+      const days = inclusiveDays(lot.issueDate, end);
+      amount = lot.qty * mt.rentPerDay * days;
+      parts.push(`${lot.qty} × ₹${mt.rentPerDay} × ${days} days`);
     } else {
-      // Non-anchor: day-wise from issue date on the quantity still held,
-      // using the 30-day-month convention.
-      const days = countBillableDays(issueDate, today);
-      amount += b.quantityRemaining * mt.rentPerDay * days;
-      parts.push(`${b.quantityRemaining} × ₹${mt.rentPerDay} × ${days} days`);
+      // MONTHLY — walk every cycle from the issue cycle to the leave/current cycle.
+      const a = anchor ?? lot.issueDate;
+      const issueCS = cycleStartContaining(lot.issueDate, a);
+      const leaveCS = cycleStartContaining(lot.leaveDate ?? tToday, a);
+      let cs = issueCS;
+      while (cs <= leaveCS) {
+        const ce = subDays(addMonths(cs, 1), 1);
+        const isLast = cs.getTime() === leaveCS.getTime();
+        const isIssueCycle = cs.getTime() === issueCS.getTime();
+        const midCycleAdd = isIssueCycle && lot.issueDate > cs;
+        const completed = ce < tToday;
+        const returnedThisCycle = lot.leaveDate !== null && isLast;
+
+        // Every batch's FIRST month is billed up-front from its issue date (a
+        // one-month commitment). Each LATER month is billed only once it fully
+        // completes — a still-held, in-progress later month is not charged yet
+        // (the bill steps up at month end, or a return prorates it).
+        if (!completed && !returnedThisCycle && !isIssueCycle) {
+          cs = addMonths(cs, 1);
+          continue;
+        }
+
+        if (midCycleAdd && lot.leaveDate && isLast) {
+          // Added mid-cycle and returned in the same cycle: prorate to the cycle
+          // end (gross), then refund the unused tail (return → cycle end).
+          const grossDays = inclusiveDays(lot.issueDate, ce);
+          const refundDays = inclusiveDays(lot.leaveDate, ce);
+          const ref = lot.qty * mt.rentPerDay * refundDays;
+          amount += lot.qty * mt.rentPerDay * grossDays - ref;
+          refund += ref;
+          parts.push(`${lot.qty} × ₹${mt.rentPerDay} × ${grossDays} days − ${lot.qty} × ₹${mt.rentPerDay} × ${refundDays} days`);
+        } else if (midCycleAdd) {
+          // Added mid-cycle, still held: prorate from issue date to the cycle end.
+          const days = inclusiveDays(lot.issueDate, ce);
+          amount += lot.qty * mt.rentPerDay * days;
+          parts.push(`${lot.qty} × ₹${mt.rentPerDay} × ${days} days`);
+        } else if (lot.leaveDate && isLast) {
+          // Returned during this cycle: full month, minus the unused-tail refund —
+          // unless this is the FIXED first (anchor) month.
+          if (cs.getTime() === a.getTime()) {
+            amount += lot.qty * mt.monthlyRate;
+            parts.push(`${lot.qty} × ₹${mt.monthlyRate}/month (first month, fixed)`);
+          } else {
+            const refundDays = inclusiveDays(lot.leaveDate, ce);
+            const ref = lot.qty * mt.rentPerDay * refundDays;
+            amount += lot.qty * mt.monthlyRate - ref;
+            refund += ref;
+            parts.push(`${lot.qty} × ₹${mt.monthlyRate}/month − ${lot.qty} × ₹${mt.rentPerDay} × ${refundDays} days`);
+          }
+        } else {
+          // Held through the whole cycle (or current cycle billed up-front).
+          amount += lot.qty * mt.monthlyRate;
+          parts.push(`${lot.qty} × ₹${mt.monthlyRate}/month`);
+        }
+        cs = addMonths(cs, 1);
+      }
     }
 
-    items.push({
-      materialType: mt,
-      issueDate: b.issueDate,
-      quantityIssued: b.quantityIssued,
-      quantityRemaining: b.quantityRemaining,
-      isAnchor: b.isAnchor,
-      amount,
-      calculationText: `${parts.join(" + ")} = ₹${amount.toFixed(2)}`,
-    });
+    const key = `${lot.materialTypeId}-${lot.issueDate.getTime()}`;
+    const g = groups.get(key);
+    if (g) {
+      g.qtyIssued += lot.qty;
+      if (!lot.leaveDate) g.qtyRemaining += lot.qty;
+      g.amount += amount;
+      g.refund += refund;
+      g.parts.push(...parts);
+    } else {
+      groups.set(key, {
+        mt,
+        issueDate: lot.issueDate,
+        qtyIssued: lot.qty,
+        qtyRemaining: lot.leaveDate ? 0 : lot.qty,
+        amount,
+        refund,
+        parts,
+      });
+    }
   }
+
+  const items: RentBreakdownItem[] = Array.from(groups.values())
+    .sort((x, y) => x.issueDate.getTime() - y.issueDate.getTime())
+    .map(g => ({
+      materialType: g.mt,
+      issueDate: g.issueDate.toISOString(),
+      quantityIssued: g.qtyIssued,
+      quantityRemaining: g.qtyRemaining,
+      isAnchor: g.mt.gracePeriodDays > 0,
+      amount: g.amount,
+      refund: g.refund,
+      calculationText: `${g.parts.join(" + ")} = ₹${g.amount.toFixed(2)}`,
+    }));
 
   return items;
 }
@@ -790,6 +835,8 @@ export function calculateSiteRent(site: Site): {
   isWithinGracePeriod: boolean;
   daysOverdue: number;
   rentAmount: number;
+  rentRefund: number;
+  rentGross: number;
   issueLoadingCharges: number;
   returnLoadingCharges: number;
   transportCharges: number;
@@ -859,6 +906,8 @@ export function calculateSiteRent(site: Site): {
   // of truth shared with the on-screen breakdown cards.
   const rentBreakdown = getRentBreakdown(site);
   const rentAmount = rentBreakdown.reduce((sum, item) => sum + item.amount, 0);
+  const rentRefund = rentBreakdown.reduce((sum, item) => sum + item.refund, 0);
+  const rentGross = rentAmount + rentRefund; // rent before early-return refunds
   const issueLoadingCharges = site.originalIssueLC;
   
   // Build material breakdown
@@ -933,6 +982,8 @@ export function calculateSiteRent(site: Site): {
     isWithinGracePeriod,
     daysOverdue,
     rentAmount,
+    rentRefund,
+    rentGross,
     issueLoadingCharges,
     returnLoadingCharges,
     transportCharges,

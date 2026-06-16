@@ -286,7 +286,6 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
               type="date"
               value={returnDate}
               onChange={(e) => setReturnDate(e.target.value)}
-              max={new Date().toISOString().split("T")[0]}
             />
             <p className="text-xs text-muted-foreground">
               Select the actual date materials were returned

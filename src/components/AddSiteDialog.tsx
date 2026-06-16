@@ -28,7 +28,6 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
   const [siteName, setSiteName] = useState("");
   const [location, setLocation] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
-  const [gracePeriodEndDate, setGracePeriodEndDate] = useState("");
   const [materialLines, setMaterialLines] = useState<MaterialLine[]>([
     { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }
   ]);
@@ -130,7 +129,7 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
           line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined,
           undefined, // No employee ID
           transportationCharge ? parseFloat(transportationCharge) : undefined,
-          gracePeriodEndDate || undefined
+          undefined // grace period end date removed — issue date is the billing start
         );
         if (success) {
           successCount++;
@@ -147,7 +146,6 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
       setSiteName("");
       setLocation("");
       setIssueDate(new Date().toISOString().split("T")[0]);
-      setGracePeriodEndDate("");
       setTransportationCharge("");
       setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]);
       onSuccess();
@@ -191,24 +189,16 @@ const AddSiteDialog = ({ open, onOpenChange, onSuccess, customerName }: AddSiteD
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="issueDate">Issue Date (Grace Period Start)</Label>
+            <Label htmlFor="issueDate">Issue Date</Label>
             <Input
               id="issueDate"
               type="date"
               value={issueDate}
               onChange={(e) => setIssueDate(e.target.value)}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="gracePeriodEndDate">End Date (Grace Period End)</Label>
-            <Input
-              id="gracePeriodEndDate"
-              type="date"
-              value={gracePeriodEndDate}
-              onChange={(e) => setGracePeriodEndDate(e.target.value)}
-              min={issueDate}
-            />
+            <p className="text-xs text-muted-foreground">
+              Billing starts from the issue date
+            </p>
           </div>
 
           <div className="space-y-2">

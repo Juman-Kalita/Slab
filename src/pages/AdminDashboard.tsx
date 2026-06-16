@@ -634,13 +634,30 @@ const AdminDashboard = () => {
 
                     {/* Financial Summary */}
                     <div className="border rounded-lg p-4 bg-muted/20 space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Rent Amount:</span>
-                        <span className="font-semibold">₹{siteCalc.rentAmount.toLocaleString("en-IN")}</span>
-                      </div>
+                      {siteCalc.rentRefund > 0 ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Rent (full months):</span>
+                            <span className="font-semibold">₹{Math.round(siteCalc.rentGross).toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-green-600 dark:text-green-400">
+                            <span>Early-Return Refund:</span>
+                            <span className="font-semibold">− ₹{Math.round(siteCalc.rentRefund).toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Rent Amount:</span>
+                            <span className="font-semibold">₹{Math.round(siteCalc.rentAmount).toLocaleString("en-IN")}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Rent Amount:</span>
+                          <span className="font-semibold">₹{Math.round(siteCalc.rentAmount).toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Loading Charges:</span>
-                        <span className="font-semibold">₹{(siteCalc.issueLoadingCharges + siteCalc.returnLoadingCharges).toLocaleString("en-IN")}</span>
+                        <span className="font-semibold">₹{Math.round(siteCalc.issueLoadingCharges + siteCalc.returnLoadingCharges).toLocaleString("en-IN")}</span>
                       </div>
                       {siteCalc.transportCharges > 0 && (
                         <div className="flex justify-between">
@@ -662,7 +679,7 @@ const AdminDashboard = () => {
                       )}
                       <div className="flex justify-between pt-2 border-t font-medium">
                         <span>Total Bill:</span>
-                        <span>₹{(siteCalc.totalRequired + site.amountPaid).toLocaleString("en-IN")}</span>
+                        <span>₹{Math.round(siteCalc.totalRequired + site.amountPaid).toLocaleString("en-IN")}</span>
                       </div>
                       {site.amountPaid > 0 && (
                         <div className="flex justify-between text-green-600 dark:text-green-400">
@@ -672,7 +689,7 @@ const AdminDashboard = () => {
                       )}
                       <div className="flex justify-between pt-2 border-t">
                         <span className="font-medium">Remaining Due:</span>
-                        <span className="font-bold text-lg text-accent">₹{siteCalc.remainingDue.toLocaleString("en-IN")}</span>
+                        <span className="font-bold text-lg text-accent">₹{Math.round(siteCalc.remainingDue).toLocaleString("en-IN")}</span>
                       </div>
                     </div>
 
@@ -761,8 +778,7 @@ const AdminDashboard = () => {
                           {siteCalc.rentBreakdown.map((item, index) => {
                             const materialType = item.materialType;
                             const issueDate = new Date(item.issueDate);
-                            const endDate = site.gracePeriodEndDate ? new Date(site.gracePeriodEndDate) : null;
-                            const isMonthlyAnchor = item.isAnchor && materialType.gracePeriodDays > 0 && !site.gracePeriodEndDate;
+                            const isMonthly = materialType.gracePeriodDays > 0;
 
                             return (
                               <div key={`${materialType.id}-${item.issueDate}-${index}`} className="p-3 bg-muted rounded space-y-2">
@@ -773,21 +789,15 @@ const AdminDashboard = () => {
                                       Quantity: {item.quantityIssued}
                                       {item.quantityRemaining !== item.quantityIssued && ` (held: ${item.quantityRemaining})`}
                                     </div>
-                                    {isMonthlyAnchor ? (
-                                      <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">New grace period - Monthly rate</div>
-                                    ) : !item.isAnchor ? (
-                                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">Added while held - Day-wise</div>
-                                    ) : null}
+                                    {isMonthly ? (
+                                      <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">Monthly billing</div>
+                                    ) : (
+                                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">Day-wise</div>
+                                    )}
                                   </div>
                                   <div className="flex-1 text-center">
                                     <div className="text-xs text-muted-foreground">Issued</div>
                                     <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
-                                    {endDate && (
-                                      <>
-                                        <div className="text-xs text-muted-foreground mt-1">End Date</div>
-                                        <div className="text-sm font-medium">{format(endDate, "dd MMM yyyy")}</div>
-                                      </>
-                                    )}
                                   </div>
                                   <div className="flex-1 text-right">
                                     <div className="text-sm font-semibold">₹{materialType.rentPerDay}/day</div>
