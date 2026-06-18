@@ -632,16 +632,12 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                                 {selectedMaterial && (
                                   <div className="rounded bg-muted p-2 text-xs space-y-0.5">
                                     <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Rent/day:</span>
-                                      <span className="font-semibold">₹{selectedMaterial.rentPerDay}</span>
+                                      <span className="text-muted-foreground">Monthly rate:</span>
+                                      <span className="font-semibold">₹{selectedMaterial.monthlyRate}/month</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-muted-foreground">LC&ULC:</span>
                                       <span className="font-semibold">₹{selectedMaterial.loadingCharge}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Grace period:</span>
-                                      <span className="font-semibold">{selectedMaterial.gracePeriodDays} days</span>
                                     </div>
                                   </div>
                                 )}

@@ -17,12 +17,12 @@ export interface MaterialType {
 
 export const MATERIAL_TYPES: MaterialType[] = [
   // PLATES Category - 0 Days Grace Period (Daily calculation)
-  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 7500 },
-  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 956 },
-  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 0, inventory: 248 },
-  { id: "new-changed-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 1000 },
-  { id: "change-plate-3x2", category: "Plates", name: "Old Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 0, inventory: 1461 },
-  { id: "change-plate-3x1", category: "Plates", name: "Old Changed", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 0, inventory: 1 },
+  { id: "plate-3x2", category: "Plates", name: "Plates", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 7500 },
+  { id: "plate-3x1", category: "Plates", name: "Plates", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 956 },
+  { id: "plate-2x1", category: "Plates", name: "Plates", size: "2'x1'", rentPerDay: 1, monthlyRate: 30, loadingCharge: 1, lostItemPenalty: 600, gracePeriodDays: 30, inventory: 248 },
+  { id: "new-changed-3x2", category: "Plates", name: "New Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1000 },
+  { id: "change-plate-3x2", category: "Plates", name: "Old Changed", size: "3'x2'", rentPerDay: 2, monthlyRate: 60, loadingCharge: 1.5, lostItemPenalty: 1200, gracePeriodDays: 30, inventory: 1461 },
+  { id: "change-plate-3x1", category: "Plates", name: "Old Changed", size: "3'x1'", rentPerDay: 1.25, monthlyRate: 37.5, loadingCharge: 1, lostItemPenalty: 800, gracePeriodDays: 30, inventory: 1 },
   
   // PROPS Category - 30 Days
   { id: "props-2x2", category: "Props", name: "Props", size: "2mx2m", rentPerDay: 2.83334, monthlyRate: 85, loadingCharge: 3, lostItemPenalty: 1440, gracePeriodDays: 30, inventory: 2937 },
@@ -651,10 +651,11 @@ export interface RentBreakdownItem {
 // Both the dues total (calculateSiteRent) and the on-screen breakdown cards use
 // this so they can never diverge.
 //
-// Two families of materials:
-//   - PLATES (gracePeriodDays === 0): pure day-wise. Each unit bills
-//     rentPerDay for every (inclusive) day it is held — issue → return, or
-//     issue → today if still held. No month, no grace.
+// All materials (including plates) bill on the MONTHLY model — there is no
+// day-wise-only family anymore (every material has gracePeriodDays > 0). The
+// day-wise branch below is kept only as a fallback for any future material
+// configured with gracePeriodDays === 0.
+//
 //   - MONTHLY materials (gracePeriodDays > 0): recurring monthly billing.
 //       * The site's monthly cycle is anchored on the FIRST monthly-material
 //         issue date (e.g. the 15th → cycles run 15th to 14th).
