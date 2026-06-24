@@ -632,8 +632,8 @@ const IssueMaterialsDialog = ({ open, onOpenChange, onSuccess }: IssueMaterialsD
                                 {selectedMaterial && (
                                   <div className="rounded bg-muted p-2 text-xs space-y-0.5">
                                     <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Monthly rate:</span>
-                                      <span className="font-semibold">₹{selectedMaterial.monthlyRate}/month</span>
+                                      <span className="text-muted-foreground">{selectedMaterial.category === "Plates" ? "Rate:" : "Monthly rate:"}</span>
+                                      <span className="font-semibold">{selectedMaterial.category === "Plates" ? `₹${selectedMaterial.rentPerDay}/day` : `₹${selectedMaterial.monthlyRate}/month`}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-muted-foreground">LC&ULC:</span>

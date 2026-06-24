@@ -747,7 +747,7 @@ const Dashboard = () => {
                                     <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
                                   </div>
                                   <div className="flex-1 text-right">
-                                    <div className="text-sm font-semibold">₹{materialType.monthlyRate}/month</div>
+                                    <div className="text-sm font-semibold">{materialType.category === "Plates" ? `₹${materialType.rentPerDay}/day` : `₹${materialType.monthlyRate}/month`}</div>
                                   </div>
                                 </div>
                                 <div className="text-xs bg-background p-2 rounded">

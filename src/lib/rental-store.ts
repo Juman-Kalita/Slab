@@ -744,18 +744,30 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
         const ce = subDays(addMonths(cs, 1), 1);
         const isLast = cs.getTime() === leaveCS.getTime();
         const isIssueCycle = cs.getTime() === issueCS.getTime();
-        const midCycleAdd = isIssueCycle && lot.issueDate > cs;
-        const completed = ce < tToday;
-        const returnedThisCycle = lot.leaveDate !== null && isLast;
 
-        // Every batch's FIRST month is billed up-front from its issue date (a
-        // one-month commitment). Each LATER month is billed only once it fully
-        // completes — a still-held, in-progress later month is not charged yet
-        // (the bill steps up at month end, or a return prorates it).
-        if (!completed && !returnedThisCycle && !isIssueCycle) {
+        // PLATES bill by each month's REAL day-count — every month, INCLUDING the
+        // current (in-progress) one, shown in full (so a 31-day month costs more
+        // than a 30-day one). The issue month is prorated from the issue date; a
+        // return prorates the return month to the return day.
+        if (mt.category === "Plates") {
+          const segStart = lot.issueDate > cs ? lot.issueDate : cs;
+          const returnDay = lot.leaveDate ? subDays(lot.leaveDate, 1) : null;
+          const segEnd = returnDay && returnDay < ce ? returnDay : ce;       // full cycle, or up to the return day
+          if (segEnd >= segStart) {
+            const days = inclusiveDays(segStart, segEnd);
+            amount += lot.qty * mt.rentPerDay * days;
+            parts.push(`${lot.qty} × ₹${mt.rentPerDay} × ${days} days`);
+          }
           cs = addMonths(cs, 1);
           continue;
         }
+
+        const midCycleAdd = isIssueCycle && lot.issueDate > cs;
+
+        // The current (in-progress) month is billed up-front as a full month, like
+        // every other month; an early return prorates it via the refund below.
+        const fullMonthAmount = lot.qty * mt.monthlyRate;
+        const fullMonthLabel = `${lot.qty} × ₹${mt.monthlyRate}/month`;
 
         if (midCycleAdd && lot.leaveDate && isLast) {
           // Added mid-cycle and returned in the same cycle: prorate to the cycle
@@ -775,19 +787,19 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
           // Returned during this cycle: full month, minus the unused-tail refund —
           // unless this is the FIXED first (anchor) month.
           if (cs.getTime() === a.getTime()) {
-            amount += lot.qty * mt.monthlyRate;
-            parts.push(`${lot.qty} × ₹${mt.monthlyRate}/month (first month, fixed)`);
+            amount += fullMonthAmount;
+            parts.push(`${fullMonthLabel} (first month, fixed)`);
           } else {
             const refundDays = inclusiveDays(lot.leaveDate, ce);
             const ref = lot.qty * mt.rentPerDay * refundDays;
-            amount += lot.qty * mt.monthlyRate - ref;
+            amount += fullMonthAmount - ref;
             refund += ref;
-            parts.push(`${lot.qty} × ₹${mt.monthlyRate}/month − ${lot.qty} × ₹${mt.rentPerDay} × ${refundDays} days`);
+            parts.push(`${fullMonthLabel} − ${lot.qty} × ₹${mt.rentPerDay} × ${refundDays} days`);
           }
         } else {
           // Held through the whole cycle (or current cycle billed up-front).
-          amount += lot.qty * mt.monthlyRate;
-          parts.push(`${lot.qty} × ₹${mt.monthlyRate}/month`);
+          amount += fullMonthAmount;
+          parts.push(fullMonthLabel);
         }
         cs = addMonths(cs, 1);
       }
