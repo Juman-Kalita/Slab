@@ -114,20 +114,24 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
       const effectiveStartDate = issueDate;
       for (const line of validLines) {
         const qty = parseInt(line.quantity);
+        // Add the transport charge only once (on the first material line) so it
+        // isn't duplicated across multiple materials in the same transaction.
+        const isFirstLine = validLines.indexOf(line) === 0;
+        const transportCharge = isFirstLine && transportationCharge ? parseFloat(transportationCharge) : undefined;
         const success = await issueMaterials(
           customerName,
           siteName,
           location,
-          line.materialTypeId, 
-          qty, 
-          effectiveStartDate, 
+          line.materialTypeId,
+          qty,
+          effectiveStartDate,
           line.hasOwnLabor,
           0,
           undefined,
           undefined,
           line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined,
           currentUser?.id, // pass employee ID for activity tracking
-          undefined, // transport charges (unchanged)
+          transportCharge,
           undefined // grace period end date removed — issue date is the billing start
         );
         if (success) {
