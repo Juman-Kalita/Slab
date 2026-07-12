@@ -62,7 +62,9 @@ export function dbToHistoryEvent(dbEvent: any): HistoryEvent {
     paymentMethod: dbEvent.payment_method,
     paymentScreenshot: dbEvent.payment_screenshot,
     employeeId: dbEvent.employee_id,
-    transportCharges: dbEvent.transport_charges ? parseFloat(dbEvent.transport_charges) : undefined
+    transportCharges: dbEvent.transport_charges ? parseFloat(dbEvent.transport_charges) : undefined,
+    vehicleNo: dbEvent.vehicle_no ?? undefined,
+    challanNo: dbEvent.challan_no ?? undefined
   };
 }
 
@@ -140,6 +142,8 @@ export function historyEventToDb(event: Partial<HistoryEvent>, siteId: string): 
     payment_method: event.paymentMethod ?? null,
     payment_screenshot: event.paymentScreenshot ?? null,
     employee_id: asUuidOrNull(event.employeeId),
-    transport_charges: event.transportCharges ?? null
+    transport_charges: event.transportCharges ?? null,
+    vehicle_no: event.vehicleNo ?? null,
+    challan_no: event.challanNo ?? null
   };
 }

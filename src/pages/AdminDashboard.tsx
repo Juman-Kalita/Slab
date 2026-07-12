@@ -798,6 +798,12 @@ const AdminDashboard = () => {
                                   <div className="flex-1 text-center">
                                     <div className="text-xs text-muted-foreground">Issued</div>
                                     <div className="text-sm font-medium">{format(issueDate, "dd MMM yyyy")}</div>
+                                    {item.vehicleNo && (
+                                      <div className="text-xs text-muted-foreground mt-1">Vehicle: <span className="font-medium">{item.vehicleNo}</span></div>
+                                    )}
+                                    {item.challanNo && (
+                                      <div className="text-xs text-muted-foreground">Challan: <span className="font-medium">{item.challanNo}</span></div>
+                                    )}
                                   </div>
                                   <div className="flex-1 text-right">
                                     <div className="text-sm font-semibold">{materialType.category === "Plates" ? `₹${materialType.rentPerDay}/day` : `₹${materialType.monthlyRate}/month`}</div>

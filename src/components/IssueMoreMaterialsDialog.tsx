@@ -35,6 +35,8 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
     { id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }
   ]);
   const [transportationCharge, setTransportationCharge] = useState("");
+  const [vehicleNo, setVehicleNo] = useState("");
+  const [challanNo, setChallanNo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [inventory, setInventory] = useState<Record<string, number>>({});
 
@@ -114,10 +116,13 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
       const effectiveStartDate = issueDate;
       for (const line of validLines) {
         const qty = parseInt(line.quantity);
-        // Add the transport charge only once (on the first material line) so it
-        // isn't duplicated across multiple materials in the same transaction.
+        // Add the transport charge / shipping details only once (on the first
+        // material line) so they aren't duplicated across multiple materials.
         const isFirstLine = validLines.indexOf(line) === 0;
         const transportCharge = isFirstLine && transportationCharge ? parseFloat(transportationCharge) : undefined;
+        const shippingDetails = isFirstLine && (vehicleNo || challanNo)
+          ? { vehicleNo: vehicleNo || undefined, challanNo: challanNo || undefined }
+          : undefined;
         const success = await issueMaterials(
           customerName,
           siteName,
@@ -128,7 +133,7 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
           line.hasOwnLabor,
           0,
           undefined,
-          undefined,
+          shippingDetails,
           line.customLoadingCharge ? parseFloat(line.customLoadingCharge) : undefined,
           currentUser?.id, // pass employee ID for activity tracking
           transportCharge,
@@ -142,6 +147,8 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
       toast.success(`Added ${successCount} material types to ${siteName}`);
       setIssueDate(new Date().toISOString().split("T")[0]);
       setTransportationCharge("");
+      setVehicleNo("");
+      setChallanNo("");
       setMaterialLines([{ id: crypto.randomUUID(), materialTypeId: "", quantity: "", hasOwnLabor: false, customLoadingCharge: "" }]);
       onSuccess();
       onOpenChange(false);
@@ -175,6 +182,29 @@ const IssueMoreMaterialsDialog = ({ open, onOpenChange, onSuccess, customerName,
             />
           </div>
 
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="vehicleNo">Vehicle Number - Optional</Label>
+              <Input
+                id="vehicleNo"
+                type="text"
+                placeholder="e.g. MH12AB1234"
+                value={vehicleNo}
+                onChange={(e) => setVehicleNo(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="challanNo">Challan Number - Optional</Label>
+              <Input
+                id="challanNo"
+                type="text"
+                placeholder="e.g. CH-2024-001"
+                value={challanNo}
+                onChange={(e) => setChallanNo(e.target.value)}
+              />
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="transportationCharge">Transportation Charge (₹) - Optional</Label>

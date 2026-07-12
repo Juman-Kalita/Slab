@@ -3,6 +3,32 @@ import { dbToCustomer, customerToDb, siteToDb, materialToDb, historyEventToDb } 
 import type { Customer } from './rental-store';
 import { MATERIAL_TYPES } from './rental-store';
 
+// Columns that may not exist yet on older databases (added by later migrations).
+// If an insert fails because one is missing, we retry without them so the core
+// operation still succeeds.
+const OPTIONAL_HISTORY_COLUMNS = ['vehicle_no', 'challan_no'];
+
+function isMissingColumnError(error: any): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST204' || error.code === '42703') return true;
+  const msg = (error.message || '').toLowerCase();
+  return OPTIONAL_HISTORY_COLUMNS.some(col => msg.includes(col));
+}
+
+// Insert history rows, gracefully dropping optional columns the DB doesn't have.
+async function insertHistoryRows(rows: any[]): Promise<void> {
+  let { error } = await supabase.from('history_events').insert(rows);
+  if (error && isMissingColumnError(error)) {
+    const stripped = rows.map(r => {
+      const copy = { ...r };
+      for (const col of OPTIONAL_HISTORY_COLUMNS) delete copy[col];
+      return copy;
+    });
+    ({ error } = await supabase.from('history_events').insert(stripped));
+  }
+  if (error) throw error;
+}
+
 // Fetch all customers with nested data
 export async function getCustomers(): Promise<Customer[]> {
   try {
@@ -118,11 +144,7 @@ export async function createCustomerWithSite(
 
   // Insert history events
   const eventsToInsert = historyEvents.map(e => historyEventToDb(e, site.id));
-  const { error: historyError } = await supabase
-    .from('history_events')
-    .insert(eventsToInsert);
-
-  if (historyError) throw historyError;
+  await insertHistoryRows(eventsToInsert);
 
   return customer.id;
 }
@@ -188,11 +210,7 @@ export async function addSiteToCustomer(
 
   // Insert history events
   const eventsToInsert = historyEvents.map(e => historyEventToDb(e, site.id));
-  const { error: historyError } = await supabase
-    .from('history_events')
-    .insert(eventsToInsert);
-
-  if (historyError) throw historyError;
+  await insertHistoryRows(eventsToInsert);
 
   return site.id;
 }
@@ -268,14 +286,12 @@ export async function addHistoryEvent(
     paymentScreenshot?: string;
     employeeId?: string;
     transportCharges?: number;
+    vehicleNo?: string;
+    challanNo?: string;
     invoiceNumber?: string;
   }
 ): Promise<void> {
-  const { error } = await supabase
-    .from('history_events')
-    .insert(historyEventToDb(event, siteId));
-
-  if (error) throw error;
+  await insertHistoryRows([historyEventToDb(event, siteId)]);
 }
 
 // Update site payment
@@ -492,6 +508,8 @@ export async function updateSite(
     siteName?: string;
     location?: string;
     issueDate?: string;
+    vehicleNo?: string;
+    challanNo?: string;
   }
 ): Promise<boolean> {
   try {
@@ -499,6 +517,8 @@ export async function updateSite(
     if (updates.siteName !== undefined) updateData.site_name = updates.siteName;
     if (updates.location !== undefined) updateData.location = updates.location;
     if (updates.issueDate !== undefined) updateData.issue_date = updates.issueDate;
+    if (updates.vehicleNo !== undefined) updateData.vehicle_no = updates.vehicleNo;
+    if (updates.challanNo !== undefined) updateData.challan_no = updates.challanNo;
 
     const { error } = await supabase
       .from('sites')

@@ -119,6 +119,8 @@ export interface HistoryEvent {
   paymentScreenshot?: string; // Base64 encoded screenshot for UPI/Bank Transfer
   employeeId?: string; // ID of employee who performed this action
   transportCharges?: number; // Transportation charges for returns
+  vehicleNo?: string; // Vehicle used for this delivery (per-transaction)
+  challanNo?: string; // Challan number for this delivery (per-transaction)
   invoiceNumber?: string; // Invoice number if this is an invoice generation event
 }
 
@@ -326,8 +328,18 @@ export async function issueMaterials(
           quantity,
           hasOwnLabor,
           transportCharges: transportCharges || undefined,
+          vehicleNo: shippingDetails?.vehicleNo,
+          challanNo: shippingDetails?.challanNo,
           employeeId
         });
+
+        // Record the vehicle / challan used for this delivery on the site
+        if (shippingDetails?.vehicleNo || shippingDetails?.challanNo) {
+          await SupabaseStore.updateSite(site.id, {
+            vehicleNo: shippingDetails.vehicleNo,
+            challanNo: shippingDetails.challanNo,
+          });
+        }
 
         // Auto-apply customer advance deposit to this site
         if (existing.advanceDeposit > 0) {
@@ -386,6 +398,8 @@ export async function issueMaterials(
             quantity,
             hasOwnLabor,
             transportCharges: transportCharges || undefined,
+            vehicleNo: shippingDetails?.vehicleNo,
+            challanNo: shippingDetails?.challanNo,
             employeeId
           }
         ];
@@ -462,6 +476,8 @@ export async function issueMaterials(
           quantity,
           hasOwnLabor,
           transportCharges: transportCharges || undefined,
+          vehicleNo: shippingDetails?.vehicleNo,
+          challanNo: shippingDetails?.challanNo,
           employeeId
         }
       ];
@@ -644,6 +660,8 @@ export interface RentBreakdownItem {
   isAnchor: boolean;
   amount: number;        // net rent for this batch (after any early-return refund)
   refund: number;        // early-return refund subtracted from this batch (>= 0)
+  vehicleNo?: string;    // vehicle used for this delivery (per-transaction)
+  challanNo?: string;    // challan number for this delivery (per-transaction)
   calculationText: string;
 }
 
@@ -682,11 +700,11 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
     })
     .map(x => x.h);
 
-  interface Lot { materialTypeId: string; issueDate: Date; qty: number; leaveDate: Date | null; }
+  interface Lot { materialTypeId: string; issueDate: Date; qty: number; leaveDate: Date | null; vehicleNo?: string; challanNo?: string; }
   const lots: Lot[] = [];
   for (const ev of events) {
     if (ev.action === "Issued" && ev.materialTypeId && ev.quantity) {
-      lots.push({ materialTypeId: ev.materialTypeId, issueDate: dateOnly(new Date(ev.date)), qty: ev.quantity, leaveDate: null });
+      lots.push({ materialTypeId: ev.materialTypeId, issueDate: dateOnly(new Date(ev.date)), qty: ev.quantity, leaveDate: null, vehicleNo: ev.vehicleNo, challanNo: ev.challanNo });
     } else if (ev.action === "Returned" && ev.materialTypeId) {
       let leaving = (ev.quantity || 0) + (ev.quantityLost || 0);
       const leaveDate = dateOnly(new Date(ev.date));
@@ -698,7 +716,7 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
             leaving -= lot.qty;
           } else {
             // Split: the returned portion gets a leave date, the rest stays held.
-            lots.push({ materialTypeId: lot.materialTypeId, issueDate: lot.issueDate, qty: leaving, leaveDate });
+            lots.push({ materialTypeId: lot.materialTypeId, issueDate: lot.issueDate, qty: leaving, leaveDate, vehicleNo: lot.vehicleNo, challanNo: lot.challanNo });
             lot.qty -= leaving;
             leaving = 0;
           }
@@ -717,7 +735,7 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
   }
 
   // Compute each lot's rent, then group by (material type + issue date).
-  interface Group { mt: MaterialType; issueDate: Date; qtyIssued: number; qtyRemaining: number; amount: number; refund: number; parts: string[]; }
+  interface Group { mt: MaterialType; issueDate: Date; qtyIssued: number; qtyRemaining: number; amount: number; refund: number; parts: string[]; vehicleNo?: string; challanNo?: string; }
   const groups = new Map<string, Group>();
 
   for (const lot of lots) {
@@ -813,6 +831,8 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
       g.amount += amount;
       g.refund += refund;
       g.parts.push(...parts);
+      if (!g.vehicleNo && lot.vehicleNo) g.vehicleNo = lot.vehicleNo;
+      if (!g.challanNo && lot.challanNo) g.challanNo = lot.challanNo;
     } else {
       groups.set(key, {
         mt,
@@ -822,6 +842,8 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
         amount,
         refund,
         parts,
+        vehicleNo: lot.vehicleNo,
+        challanNo: lot.challanNo,
       });
     }
   }
@@ -836,6 +858,8 @@ export function getRentBreakdown(site: Site, today: Date = new Date()): RentBrea
       isAnchor: g.mt.gracePeriodDays > 0,
       amount: g.amount,
       refund: g.refund,
+      vehicleNo: g.vehicleNo,
+      challanNo: g.challanNo,
       calculationText: `${g.parts.join(" + ")} = ₹${g.amount.toFixed(2)}`,
     }));
 
