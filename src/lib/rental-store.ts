@@ -341,29 +341,8 @@ export async function issueMaterials(
           });
         }
 
-        // Auto-apply customer advance deposit to this site
-        if (existing.advanceDeposit > 0) {
-          const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
-          await SupabaseStore.updateCustomerAdvanceDeposit(
-            existing.id,
-            existing.advanceDeposit - amountToApply
-          );
-          
-          const currentSite = (await getCustomers())
-            .find(c => c.id === existing.id)?.sites
-            .find(s => s.id === site.id);
-          
-          if (currentSite) {
-            await SupabaseStore.updateSitePayment(site.id, currentSite.amountPaid + amountToApply);
-            await SupabaseStore.addHistoryEvent(site.id, {
-              date: issueDate,
-              action: "Payment",
-              amount: amountToApply,
-              paymentMethod: "Advance Deposit",
-              employeeId
-            });
-          }
-        }
+        // Advance deposit is held separately and is NOT auto-applied to new
+        // issues — it stays as the customer's balance until explicitly used.
 
         // Add deposit as payment if provided
         if (depositAmount > 0) {
@@ -406,24 +385,8 @@ export async function issueMaterials(
 
         let initialAmountPaid = 0;
 
-        // Auto-apply customer advance deposit to new site
-        if (existing.advanceDeposit > 0) {
-          const amountToApply = Math.min(existing.advanceDeposit, rentCharge + issueLC);
-          initialAmountPaid += amountToApply;
-          
-          await SupabaseStore.updateCustomerAdvanceDeposit(
-            existing.id,
-            existing.advanceDeposit - amountToApply
-          );
-          
-          historyEvents.push({
-            date: issueDate,
-            action: "Payment" as const,
-            amount: amountToApply,
-            paymentMethod: "Advance Deposit",
-            employeeId
-          });
-        }
+        // Advance deposit is held separately and is NOT auto-applied to new
+        // issues — it stays as the customer's balance until explicitly used.
 
         // Add deposit if provided
         if (depositAmount > 0) {
