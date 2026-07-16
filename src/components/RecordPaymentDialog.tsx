@@ -34,6 +34,9 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const [loading, setLoading] = useState(false);
   // Payment mode: 'neutral' = normal payment, 'deposit' = apply advance deposit
   const [paymentMode, setPaymentMode] = useState<'neutral' | 'deposit'>('neutral');
+  // Deposit application: 'full' = settle in full, 'manual' = apply a chosen amount
+  const [depositMode, setDepositMode] = useState<'full' | 'manual'>('full');
+  const [depositManualAmount, setDepositManualAmount] = useState("");
 
   const effectiveCustomerId = preSelectedCustomerId || selectedCustomerId;
 
@@ -68,7 +71,10 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
   const depositAvailable = selectedCustomer?.advanceDeposit || 0;
 
   // Deposit adjustment preview
-  const depositApplied = calculatedRent ? Math.min(depositAvailable, calculatedRent.remainingDue) : 0;
+  const depositMaxApplicable = calculatedRent ? Math.min(depositAvailable, calculatedRent.remainingDue) : 0;
+  const depositApplied = depositMode === 'manual'
+    ? Math.min(Math.max(parseFloat(depositManualAmount) || 0, 0), depositMaxApplicable)
+    : depositMaxApplicable;
   const afterDepositDue = calculatedRent ? Math.max(0, calculatedRent.remainingDue - depositApplied) : 0;
   const depositLeftover = Math.max(0, depositAvailable - depositApplied);
 
@@ -81,6 +87,8 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
     setPaymentDetails("");
     setPaymentDate(new Date().toISOString().split("T")[0]);
     setPaymentMode('neutral');
+    setDepositMode('full');
+    setDepositManualAmount("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,10 +109,18 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
           setSubmitting(false);
           return;
         }
+        if (depositMode === 'manual' && (parseFloat(depositManualAmount) || 0) <= 0) {
+          toast.error("Enter an amount to apply from the deposit");
+          setSubmitting(false);
+          return;
+        }
+        const requestedAmount = depositMode === 'manual' ? (parseFloat(depositManualAmount) || 0) : undefined;
         const result = await recordDepositAdjustment(
           effectiveCustomerId,
           selectedSiteId,
-          new Date(paymentDate).toISOString()
+          new Date(paymentDate).toISOString(),
+          undefined,
+          requestedAmount
         );
         if (result.success) {
           toast.success(`Applied ₹${result.amountApplied.toLocaleString("en-IN")} from advance deposit. ${result.remainingDue > 0 ? `₹${result.remainingDue.toLocaleString("en-IN")} still due.` : "Fully settled!"}`);
@@ -302,6 +318,35 @@ const RecordPaymentDialog = ({ open, onOpenChange, onSuccess, preSelectedCustome
                 <span className="text-muted-foreground">Advance Deposit Available:</span>
                 <span className="font-semibold text-green-600">₹{depositAvailable.toLocaleString("en-IN")}</span>
               </div>
+
+              <div className="flex items-center gap-4 border-t pt-2">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="depositMode" checked={depositMode === 'full'} onChange={() => setDepositMode('full')} />
+                  <span>Settle in full</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="depositMode" checked={depositMode === 'manual'} onChange={() => setDepositMode('manual')} />
+                  <span>Custom amount</span>
+                </label>
+              </div>
+              {depositMode === 'manual' && (
+                <div className="space-y-1">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={`Max ₹${depositMaxApplicable.toLocaleString("en-IN")}`}
+                    value={depositManualAmount}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) setDepositManualAmount(v);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter how much of the deposit to apply (up to ₹{depositMaxApplicable.toLocaleString("en-IN")}).
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-between font-medium border-t pt-1.5">
                 <span>Amount to Apply:</span>
                 <span className="text-blue-700 dark:text-blue-300">₹{depositApplied.toLocaleString("en-IN")}</span>

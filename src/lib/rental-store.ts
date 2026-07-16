@@ -1083,8 +1083,11 @@ export async function recordPayment(customerId: string, siteId: string, amount: 
   }
 }
 
-// Apply advance deposit to a site (Deposit Adjustment mode)
-export async function recordDepositAdjustment(customerId: string, siteId: string, paymentDate?: string, employeeId?: string): Promise<{ success: boolean; amountApplied: number; remainingDeposit: number; remainingDue: number }> {
+// Apply advance deposit to a site (Deposit Adjustment mode).
+// requestedAmount: how much of the deposit to apply. If omitted/undefined, the
+// full applicable amount is applied (min of deposit and remaining due). If given,
+// it is clamped to that maximum so you can never over-apply.
+export async function recordDepositAdjustment(customerId: string, siteId: string, paymentDate?: string, employeeId?: string, requestedAmount?: number): Promise<{ success: boolean; amountApplied: number; remainingDeposit: number; remainingDue: number }> {
   try {
     const customers = await getCustomers();
     const customer = customers.find((c) => c.id === customerId);
@@ -1100,7 +1103,11 @@ export async function recordDepositAdjustment(customerId: string, siteId: string
 
     if (depositAvailable <= 0) return { success: false, amountApplied: 0, remainingDeposit: 0, remainingDue };
 
-    const amountToApply = Math.min(depositAvailable, remainingDue);
+    const maxApplicable = Math.min(depositAvailable, remainingDue);
+    const amountToApply = requestedAmount != null && requestedAmount > 0
+      ? Math.min(requestedAmount, maxApplicable)
+      : maxApplicable;
+    if (amountToApply <= 0) return { success: false, amountApplied: 0, remainingDeposit: depositAvailable, remainingDue };
     const remainingDeposit = depositAvailable - amountToApply;
     const newRemainingDue = remainingDue - amountToApply;
 
