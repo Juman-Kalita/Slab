@@ -49,11 +49,9 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
       const loadCustomers = async () => {
         try {
           const data = await getCustomers();
-          // Show all customers who have any issued materials (even if quantity is 0 now)
-          const filtered = data.filter((c: any) => c.sites.some((s: any) => 
-            s.history?.some((h: any) => h.action === "Issued") || s.materials.some((m: any) => m.quantity > 0)
-          ));
-          setCustomers(filtered);
+          // Keep ALL customers loaded so a pre-selected one always resolves; the
+          // search list and site dropdown filter to "currently held" separately.
+          setCustomers(data);
         } catch (error) {
           console.error('Error loading customers:', error);
         }
@@ -263,14 +261,13 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
                   <SelectValue placeholder="Select site" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedCustomer.sites.filter((s: any) => 
-                    s.history?.some((h: any) => h.action === "Issued") || s.materials.some((m: any) => m.quantity > 0)
-                  ).map((s: any) => {
-                    const totalItems = s.materials.reduce((sum: number, m: any) => sum + m.quantity, 0);
-                    const issuedItems = s.history?.filter((h: any) => h.action === "Issued").reduce((sum: number, h: any) => sum + (h.quantity || 0), 0) || 0;
+                  {selectedCustomer.sites
+                    .filter((s: any) => s.history?.some((h: any) => h.action === "Issued") || s.materials.some((m: any) => m.quantity > 0))
+                    .map((s: any) => {
+                    const heldItems = s.materials.reduce((sum: number, m: any) => sum + m.quantity, 0);
                     return (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.siteName} ({s.location}) - {totalItems > 0 ? totalItems : issuedItems} items
+                        {s.siteName} ({s.location}) - {heldItems > 0 ? `${heldItems} items held` : "fully returned"}
                       </SelectItem>
                     );
                   })}
@@ -312,7 +309,13 @@ const RecordMaterialReturnDialog = ({ open, onOpenChange, onSuccess, preSelected
             </p>
           </div>
 
-          {selectedSite && (
+          {selectedSite && !selectedSite.materials.some((m: any) => m.quantity > 0) && (
+            <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground text-center">
+              All materials at this site have already been returned — there is nothing to return here.
+            </div>
+          )}
+
+          {selectedSite && selectedSite.materials.some((m: any) => m.quantity > 0) && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-semibold">Materials to Return</Label>
